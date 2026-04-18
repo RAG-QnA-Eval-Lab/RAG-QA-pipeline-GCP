@@ -8,7 +8,8 @@ class Settings(BaseSettings):
     data_portal_api_key: str = ""
     mongodb_uri: str = "mongodb://localhost:27017"
     mongodb_db: str = "rag_youth_policy"
-    gcs_bucket: str = "rag-youth-policy"
+    gcp_project: str = "rag-qna-eval"
+    gcs_bucket: str = "rag-qna-eval-data"
     api_base_url: str = ""
 
     embedding_model: str = "text-embedding-3-small"
