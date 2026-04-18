@@ -9,10 +9,11 @@
 ## 1. 목표
 
 - **도메인**: 학생/청년 대상 정부 정책 QnA (주거, 취업, 창업, 교육, 복지, 금융)
+- **LLMOps 파이프라인**: 수집 → 인덱싱 → 서빙 → 평가 → 모니터링 전체 운영 사이클 자동화
 - Hybrid RAG (Vector + BM25 + Reranker) 파이프라인 구축
 - 멀티 LLM 비교 (GPT-4o, Claude, Gemini, Llama3)
 - 3단계 신뢰성 평가 (RAGAS + LLM Judge + DeepEval) 자동화
-- GCP Cloud Run 배포
+- GCP Cloud Run 배포 + Grafana/Cloud Monitoring 모니터링
 - **제품 수준 Streamlit 프론트엔드** — 정책 탐색, QnA 챗봇, 맞춤 추천, 정책 비교, 평가 대시보드
 
 ---
@@ -211,10 +212,10 @@ rag-youth-policy/                   # 개발 전용 레포 (별도)
 └── plan.md
 ```
 
-- [ ] pyproject.toml 생성
-- [ ] .env.example 생성
-- [ ] 디렉토리 스켈레톤 + `__init__.py`
-- [ ] `pip install -e ".[dev]"` 동작 확인
+- [x] pyproject.toml 생성
+- [x] .env.example 생성
+- [x] 디렉토리 스켈레톤 + `__init__.py`
+- [x] `pip install -e ".[dev]"` 동작 확인
 
 ### 3.4 GCP 준비
 
@@ -224,12 +225,13 @@ rag-youth-policy/                   # 개발 전용 레포 (별도)
 - **합계: ~₩786,544 (2026-06-19 만료)**
 
 - [x] GCP 계정 — Google Developer Program Premium
-- [ ] 프로젝트 생성 (예: `rag-youth-policy`)
-- [ ] API 활성화: Cloud Run, Cloud Storage, Artifact Registry, Compute Engine, Gemini API
-- [ ] `gcloud` CLI 설치 + 인증
-- [ ] Compute Engine VM 생성 (e2-small, 서울) + MongoDB 설치
-- [ ] 방화벽 규칙 설정 (MongoDB 27017 포트)
-- [ ] GCS 버킷 생성 (`rag-youth-policy`)
+- [x] 프로젝트 생성 — `rag-qna-eval`
+- [x] API 활성화: Compute Engine, Cloud Run, Cloud Storage, Artifact Registry, Cloud Build, Cloud Scheduler, Cloud Monitoring, Cloud Logging, Vertex AI (Gemini)
+- [x] `gcloud` CLI 설치 + 인증
+- [x] Compute Engine VM 생성 — `rag-mongo-vm` (e2-small, asia-northeast3-a, 20GB, 중지 상태)
+- [ ] MongoDB 설치 (Phase 1에서 VM 시작 시)
+- [ ] 방화벽 규칙 설정 (MongoDB 27017 포트, Phase 1에서)
+- [x] GCS 버킷 생성 — `gs://rag-qna-eval-data` (asia-northeast3, STANDARD)
 - [ ] 예산 알림 ₩200,000 설정
 - [ ] Gemini API 키 발급 (₩71,504 크레딧 활용)
 
@@ -253,11 +255,22 @@ rag-youth-policy/                   # 개발 전용 레포 (별도)
 ### Phase 0 체크리스트
 
 - [x] 도메인 확정 — 학생/청년 정부 정책 QnA
-- [ ] 데이터 소스 접근성 검증 (온통청년 크롤링 가능 여부, 공공데이터포털 API)
+- [x] 데이터 소스 접근성 검증
+  - [x] 온통청년: 내부 검색 API (1,608건 JSON) + Open API 확인
+  - [x] 공공데이터포털: `한국고용정보원_온통청년_청년정책API` (15143273) 활용 신청 완료 (승인 대기)
+  - [x] 한국장학재단: SSR HTML, BeautifulSoup 파싱 가능, k-skill 스키마 참고
+  - [x] 온통청년 Open API 별도 발급 불필요 (공공데이터포털 경유 = 동일 데이터, JSON 응답)
+- [x] 레포 스켈레톤 세팅 — pyproject.toml, config/, src/, data/, tests/, Dockerfile, CI/CD
+- [x] GCP 인프라 준비
+  - [x] 프로젝트: `rag-qna-eval`
+  - [x] API 활성화: Compute Engine, Cloud Run, Artifact Registry, Cloud Build, Cloud Scheduler, Monitoring, Logging, Vertex AI
+  - [x] GCS 버킷: `gs://rag-qna-eval-data` (asia-northeast3)
+  - [x] VM: `rag-mongo-vm` (e2-small, 중지 상태 — Phase 1에서 시작)
+  - [ ] 예산 알림 ₩200,000 설정
+- [x] 멀티클라우드 전략 문서화 — `docs/multi-cloud.md` (캡스톤 팀 AWS 연동)
 - [ ] 초기 데이터 50건 수집 테스트
 - [ ] RAGAS v0.4 Jupyter notebook 검증
-- [ ] 레포 스켈레톤 세팅 (rag-youth-policy)
-- [ ] API 키 발급 (OpenAI + 공공데이터포털 + Gemini)
+- [ ] API 키: 공공데이터포털 승인 대기 / Gemini API 키 미발급
 - [ ] 중간 발표 슬라이드
 - [ ] 4/15 보고서 제출
 
@@ -417,8 +430,8 @@ python scripts/collect_policies.py --source youthgo
 python -m src.ingestion.pipeline --output data/index/
 
 # FAISS 인덱스를 GCS에 업로드 (Cloud Run 배포용)
-gsutil cp data/index/faiss.index gs://rag-youth-policy/index/
-gsutil cp data/index/metadata.pkl gs://rag-youth-policy/index/
+gsutil cp data/index/faiss.index gs://rag-qna-eval-data/index/
+gsutil cp data/index/metadata.pkl gs://rag-qna-eval-data/index/
 ```
 
 ### 4.5 src/ingestion/loader.py
@@ -664,7 +677,47 @@ python -m src.generation.pipeline \
 | welfare | "청년 건강검진 무료 대상은?" | easy |
 | finance | "청년도약계좌 정부기여금 매칭 비율은?" | medium |
 
-**100개 수동 작성은 시간이 가장 많이 걸린다. Phase 3 시작과 동시에 틈틈이 작성할 것.**
+**QA 데이터셋 생성 전략: LLM 자동 생성 + 수동 검수**
+
+수동 작성 대신 수집된 정책 원본 데이터를 LLM에 입력하여 QA 쌍을 자동 생성한다.
+
+**생성 파이프라인**:
+
+```
+정책 원본 (수집 완료)                    LLM 자동 생성                     수동 검수
+━━━━━━━━━━━━━━━━━━━━    →    ━━━━━━━━━━━━━━━━━━━━━━━    →    ━━━━━━━━━━━━━━━
+data/policies/raw/                scripts/generate_qa.py              사람이 검수
+youthgo_sample.json               GPT-4o-mini로 생성                 - 사실 확인
+(정책 텍스트 2,181건)              - 정책 1건 → QA 2~3쌍              - 난이도 조정
+                                  - 난이도/카테고리 지정               - 중복 제거
+                                  - ground_truth 포함                 → data/eval/qa_pairs.json
+```
+
+**프롬프트 설계**:
+
+```
+역할: 한국 청년 정책 전문가
+입력: 정책 원본 텍스트 (제목, 요약, 지원내용, 신청자격 등)
+출력: QA 쌍 (question, ground_truth, difficulty, category, qa_type)
+
+생성 규칙:
+1. 정책 텍스트에 근거한 답변만 생성 (환각 방지)
+2. qa_type 분배: factual 50%, reasoning 30%, comparison 20%
+3. 난이도 분배: easy 40%, medium 40%, hard 20%
+4. 질문은 실제 청년이 할 법한 자연스러운 한국어
+5. ground_truth는 정책 텍스트에서 직접 발췌/요약
+```
+
+**검수 기준**:
+- ground_truth가 원본 정책 텍스트에 근거하는가?
+- 질문이 모호하거나 중복되지 않는가?
+- 답변이 충분히 구체적인가?
+- 카테고리/난이도 라벨이 적절한가?
+
+**비용 추정** (GPT-4o-mini 기준):
+- 정책 50건 × QA 2쌍 = 100쌍 생성
+- 입력 ~500토큰/정책 + 출력 ~300토큰/QA쌍 ≈ 총 ~80K 토큰
+- 예상 비용: ~$0.01 (무시 가능)
 
 ### 7.2 Stage 1: RAGAS v0.4 정량 평가
 
@@ -929,24 +982,24 @@ sudo apt-get install -y gnupg curl
 ```bash
 # BE (FastAPI) — 무거운 ML 의존성
 gcloud builds submit \
-  --tag asia-northeast3-docker.pkg.dev/rag-youth-policy/repo/api:latest
+  --tag asia-northeast3-docker.pkg.dev/rag-qna-eval/repo/api:latest
 
 gcloud run deploy rag-youth-policy-api \
-  --image asia-northeast3-docker.pkg.dev/rag-youth-policy/repo/api:latest \
+  --image asia-northeast3-docker.pkg.dev/rag-qna-eval/repo/api:latest \
   --region asia-northeast3 \
   --memory 2Gi \
   --min-instances 0 \
   --max-instances 1 \
-  --set-env-vars "OPENAI_API_KEY=xxx,GOOGLE_API_KEY=xxx,MONGODB_URI=mongodb://MONGO_VM_IP:27017,GCS_BUCKET=rag-youth-policy" \
+  --set-env-vars "OPENAI_API_KEY=xxx,GOOGLE_API_KEY=xxx,MONGODB_URI=mongodb://MONGO_VM_IP:27017,GCS_BUCKET=rag-qna-eval-data" \
   --allow-unauthenticated
 
 # FE (Streamlit) — 가벼운 UI 전용
 gcloud builds submit \
-  --tag asia-northeast3-docker.pkg.dev/rag-youth-policy/repo/ui:latest \
+  --tag asia-northeast3-docker.pkg.dev/rag-qna-eval/repo/ui:latest \
   -f Dockerfile.ui
 
 gcloud run deploy rag-youth-policy-ui \
-  --image asia-northeast3-docker.pkg.dev/rag-youth-policy/repo/ui:latest \
+  --image asia-northeast3-docker.pkg.dev/rag-qna-eval/repo/ui:latest \
   --region asia-northeast3 \
   --memory 512Mi \
   --min-instances 0 \
@@ -1000,9 +1053,9 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
       - run: |
           gcloud builds submit \
-            --tag asia-northeast3-docker.pkg.dev/rag-youth-policy/repo/api:${{ github.sha }}
+            --tag asia-northeast3-docker.pkg.dev/rag-qna-eval/repo/api:${{ github.sha }}
           gcloud run deploy rag-youth-policy-api \
-            --image asia-northeast3-docker.pkg.dev/rag-youth-policy/repo/api:${{ github.sha }} \
+            --image asia-northeast3-docker.pkg.dev/rag-qna-eval/repo/api:${{ github.sha }} \
             --region asia-northeast3 \
             --memory 2Gi
 ```
@@ -1028,10 +1081,10 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
       - run: |
           gcloud builds submit \
-            --tag asia-northeast3-docker.pkg.dev/rag-youth-policy/repo/ui:${{ github.sha }} \
+            --tag asia-northeast3-docker.pkg.dev/rag-qna-eval/repo/ui:${{ github.sha }} \
             -f Dockerfile.ui
           gcloud run deploy rag-youth-policy-ui \
-            --image asia-northeast3-docker.pkg.dev/rag-youth-policy/repo/ui:${{ github.sha }} \
+            --image asia-northeast3-docker.pkg.dev/rag-qna-eval/repo/ui:${{ github.sha }} \
             --region asia-northeast3 \
             --memory 512Mi
 ```

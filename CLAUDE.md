@@ -41,6 +41,7 @@ data/
 
 **데이터 흐름**:
 - 수집: 정부사이트 → collectors → GCS (원본 저장) + MongoDB (메타데이터: policy_id, title, gcs_path, status)
+- QA 생성: 정책 원본 → LLM (GPT-4o-mini) 자동 생성 → 수동 검수 → data/eval/qa_pairs.json
 - 인덱싱: GCS 원본 → chunker → embedder → FAISS index + metadata.pkl → GCS 업로드
 - 서빙: Cloud Run 기동 → GCS에서 FAISS 인덱스 다운로드 → 인메모리 검색
 - 지속 수집: Cloud Scheduler → Cloud Run Job → 수집기 → GCS + MongoDB → 인덱스 재빌드 → GCS
