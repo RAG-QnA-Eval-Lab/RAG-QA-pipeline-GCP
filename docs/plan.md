@@ -55,9 +55,19 @@ Phase 0                     P1         P2       P3       P4        P5         P6
 | 국토교통부 | molit.go.kr | 청년 주거정책 (PDF) | ★★★ |
 
 - [x] 도메인 확정 — 학생/청년 정부 정책 QnA
-- [ ] 온통청년 API 또는 크롤링 가능 여부 확인
-- [ ] 공공데이터포털 청년정책 API 목록 조사
-- [ ] 수집 대상 카테고리 확정 (주거/취업/창업/교육/복지/금융)
+- [x] 온통청년 API 또는 크롤링 가능 여부 확인
+  - 내부 검색 API 확인: `POST /pubot/search/portalPolicySearch` → JSON 1,608건 (세션 쿠키 + CSRF 토큰 필요)
+  - Open API 별도 존재: `/opi/youthPlcyList.do` (회원가입 + API 키 승인 필요, XML 응답)
+  - `.do` 패턴 URL은 HTTP:8080 리다이렉트 (외부 접근 불가), `/youthPolicy/*` 패턴은 HTTPS 정상
+- [x] 공공데이터포털 청년정책 API 목록 조사
+  - API 자체는 존재하나, 테스트 시점에 500 에러 반환 (서버 측 이슈)
+  - API 키 발급 후 재검증 필요
+- [x] 한국장학재단 접근성 확인
+  - 서버사이드 렌더링 HTML → BeautifulSoup 파싱 적합
+  - robots.txt: `User-agent: * Allow:/` (전면 허용)
+  - URL 패턴: `/ko/scholar.do?pg=scholarship05_XX_XX` (15+ 페이지)
+  - NomaDamas/k-skill `korean-scholarship-search` 스키마 참고 (정규화 스키마 + source-patterns 활용, 수집기는 직접 구현)
+- [x] 수집 대상 카테고리 확정 (주거/취업/창업/교육/복지/금융)
 - [ ] 초기 데이터 50건 이상 수집 테스트
 - [ ] `data/policies/raw/`에 수집 데이터 배치
 

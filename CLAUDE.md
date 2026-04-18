@@ -64,7 +64,7 @@ ruff format .
 # Pipelines
 python scripts/collect_policies.py --all                    # 정책 수집 → GCS + MongoDB 메타데이터
 python -m src.ingestion.pipeline --output data/index/       # GCS 원본 → FAISS 인덱스 빌드
-gsutil cp data/index/* gs://rag-youth-policy/index/         # GCS 업로드
+gsutil cp data/index/* gs://rag-qna-eval-data/index/         # GCS 업로드
 python -m src.retrieval.pipeline --query "질문" --strategy hybrid_rerank   # 검색 테스트
 python -m src.generation.pipeline --query "질문" --model openai/gpt-4o-mini --strategy hybrid_rerank
 
@@ -103,7 +103,8 @@ GOOGLE_API_KEY=
 DATA_PORTAL_API_KEY=     # 공공데이터포털 API
 MONGODB_URI=mongodb://MONGO_VM_IP:27017
 MONGODB_DB=rag_youth_policy
-GCS_BUCKET=rag-youth-policy
+GCP_PROJECT=rag-qna-eval
+GCS_BUCKET=rag-qna-eval-data
 API_BASE_URL=                # FE → BE 통신 URL (Cloud Run 배포 시 설정)
 GCP_SA_KEY=                  # GitHub Actions 시크릿 (서비스 계정 JSON 키)
 ```
