@@ -1,0 +1,25 @@
+name: Deploy FE (Streamlit)
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/ui/**"
+      - "Dockerfile.ui"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: |
+          gcloud builds submit \
+            --tag asia-northeast3-docker.pkg.dev/rag-youth-policy/repo/ui:${{ github.sha }} \
+            -f Dockerfile.ui
+          gcloud run deploy rag-youth-policy-ui \
+            --image asia-northeast3-docker.pkg.dev/rag-youth-policy/repo/ui:${{ github.sha }} \
+            --region asia-northeast3 \
+            --memory 512Mi

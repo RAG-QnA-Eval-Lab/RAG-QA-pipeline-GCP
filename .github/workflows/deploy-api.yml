@@ -1,0 +1,30 @@
+name: Deploy BE (FastAPI)
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/api/**"
+      - "src/retrieval/**"
+      - "src/generation/**"
+      - "src/evaluation/**"
+      - "src/ingestion/**"
+      - "config/**"
+      - "Dockerfile"
+      - "pyproject.toml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: |
+          gcloud builds submit \
+            --tag asia-northeast3-docker.pkg.dev/rag-youth-policy/repo/api:${{ github.sha }}
+          gcloud run deploy rag-youth-policy-api \
+            --image asia-northeast3-docker.pkg.dev/rag-youth-policy/repo/api:${{ github.sha }} \
+            --region asia-northeast3 \
+            --memory 2Gi
