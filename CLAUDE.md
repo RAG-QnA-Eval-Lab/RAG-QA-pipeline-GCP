@@ -16,7 +16,8 @@ GCP 인프라:
   Cloud Run #2 (FE, 512Mi)  — Streamlit (httpx → BE API 호출)
   Cloud Monitoring          — 메트릭 수집 (Cloud Run 기본 + FastAPI 커스텀)
   Cloud Logging             — 구조화 JSON 로그 (RAG 요청별 레이턴시/토큰/비용)
-  Cloud Scheduler           — 배치 수집 트리거 (매일 1회)
+  Cloud Scheduler           — 수집 Job 트리거 (매일 1회)
+  Eventarc                  — GCS 이벤트 → 인덱싱 Job 자동 체이닝
 
 src/
 ├── api/                # FastAPI 백엔드 (Cloud Run #1, 2Gi) — /search, /generate, /policies, /evaluate
@@ -44,8 +45,12 @@ data/
 - QA 생성: 정책 원본 → LLM (GPT-4o-mini) 자동 생성 → 수동 검수 → data/eval/qa_pairs.json
 - 인덱싱: GCS 원본 → chunker → embedder → FAISS index + metadata.pkl → GCS 업로드
 - 서빙: Cloud Run 기동 → GCS에서 FAISS 인덱스 다운로드 → 인메모리 검색
-- 지속 수집: Cloud Scheduler → Cloud Run Job → 수집기 → GCS + MongoDB → 인덱스 재빌드 → GCS
+- 지속 수집: Cloud Scheduler → Cloud Run Job #1 (수집) → GCS + MongoDB → Eventarc (GCS 이벤트) → Cloud Run Job #2 (인덱싱) → GCS
 - 모니터링: FastAPI 커스텀 메트릭 → Cloud Monitoring → Grafana 대시보드
+
+## Current State
+
+Phase 0 (레포 스켈레톤) 완료. `src/` 내 모든 파일은 `__init__.py` 스텁만 존재. 실제 구현은 `docs/plan.md`의 Phase 1~6 순서대로 진행. 구현 시 plan.md의 해당 Phase 섹션을 반드시 참조할 것.
 
 ## Commands
 
@@ -57,6 +62,7 @@ pip install -e ".[dev,ui,ko,crawl,viz]"
 pytest                              # 전체
 pytest tests/test_ingestion.py      # 단일 모듈
 pytest -k "test_chunk_size"         # 단일 테스트
+pytest --cov=src --cov-report=term-missing  # 커버리지
 
 # Lint
 ruff check .
