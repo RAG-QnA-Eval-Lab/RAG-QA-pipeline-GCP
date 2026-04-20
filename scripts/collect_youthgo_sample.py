@@ -15,7 +15,10 @@ OUTPUT_DIR = Path(__file__).parent.parent / "data" / "policies" / "raw"
 OUTPUT_FILE = OUTPUT_DIR / "youthgo_sample.json"
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    ),
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
     "Content-Type": "application/json;charset=UTF-8",
@@ -122,7 +125,7 @@ def main() -> None:
             print(f"\n원본 응답 저장: {OUTPUT_FILE.with_suffix('.raw.json')}")
             return
 
-        print(f"\n[3/3] 정규화 및 저장...")
+        print("\n[3/3] 정규화 및 저장...")
         policies = [normalize_policy(p, i) for i, p in enumerate(policies_raw)]
 
         output = {
@@ -140,7 +143,7 @@ def main() -> None:
 
         if policies:
             sample = policies[0]
-            print(f"\n--- 샘플 (첫 번째 정책) ---")
+            print("\n--- 샘플 (첫 번째 정책) ---")
             print(f"  policy_id:    {sample['policy_id']}")
             print(f"  title:        {sample['title']}")
             print(f"  organization: {sample['organization']}")

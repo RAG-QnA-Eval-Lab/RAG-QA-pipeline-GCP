@@ -1,6 +1,5 @@
 """RAGAS v0.4 API 검증 — metric.ascore() 동작 확인."""
 
-import asyncio
 import sys
 
 
@@ -59,7 +58,7 @@ def check_sample_data() -> bool:
             ],
             reference="청년 주거 정책으로는 청년 전세임대, 청년 매입임대, 청년 월세 지원이 있습니다.",
         )
-        print(f"  [OK] SingleTurnSample 생성 성공")
+        print("  [OK] SingleTurnSample 생성 성공")
         print(f"  user_input: {sample.user_input[:50]}...")
         print(f"  response: {sample.response[:50]}...")
         print(f"  contexts: {len(sample.retrieved_contexts)}개")
@@ -67,7 +66,7 @@ def check_sample_data() -> bool:
     except ImportError:
         print("  [FAIL] SingleTurnSample import 실패")
         try:
-            from ragas import EvaluationDataset
+            from ragas import EvaluationDataset  # noqa: F401
 
             print("  [INFO] EvaluationDataset은 사용 가능")
         except ImportError:
@@ -103,9 +102,9 @@ def check_evaluate_function() -> bool:
     """ragas.evaluate() 함수 확인."""
     print("\n--- ragas.evaluate() 함수 확인 ---")
     try:
-        from ragas import evaluate
+        from ragas import evaluate  # noqa: F401
 
-        print(f"  [OK] from ragas import evaluate")
+        print("  [OK] from ragas import evaluate")
         return True
     except ImportError as e:
         print(f"  [FAIL] {e}")
