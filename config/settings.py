@@ -1,3 +1,10 @@
+"""프로젝트 설정 — pydantic-settings 기반, .env 자동 로드."""
+
+from __future__ import annotations
+
+import warnings
+
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -21,6 +28,12 @@ class Settings(BaseSettings):
     default_model: str = "openai/gpt-4o-mini"
 
     model_config = {"env_file": ".env"}
+
+    @model_validator(mode="after")
+    def _warn_missing_keys(self) -> Settings:
+        if not self.openai_api_key:
+            warnings.warn("OPENAI_API_KEY 미설정 — 임베딩/생성 실패 가능", stacklevel=2)
+        return self
 
 
 settings = Settings()

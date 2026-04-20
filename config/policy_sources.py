@@ -12,11 +12,20 @@ POLICY_SOURCES = {
         "notes": "내부 API는 세션쿠키(ygt JWT)+CSRF 필요. Open API는 회원가입+키 승인 필요(XML).",
     },
     "data_portal": {
-        "name": "공공데이터포털",
-        "base_url": "https://api.odcloud.kr/api",
+        "name": "공공데이터포털 (온통청년 Open API 경유)",
+        "base_url": "https://www.youthcenter.go.kr",
         "method": "api",
         "priority": 5,
-        "notes": "API 키 발급 후 사용. 테스트 시점 500 에러 — 키 발급 후 재검증.",
+        "endpoints": {
+            "youth_policy": "/go/ythip/getPlcy",
+        },
+        "auth_param": "apiKeyNm",
+        "pagination": {"page_param": "pageNum", "size_param": "pageSize", "default_size": 100},
+        "total_count": 2185,
+        "categories": {
+            "lclsfNm": ["일자리", "주거", "교육", "금융･복지･문화", "참여·권리"],
+        },
+        "notes": "서비스 15143273 (LINK 타입). rtnType=json 필수. 필드 60개.",
     },
     "kosaf": {
         "name": "한국장학재단",
