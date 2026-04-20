@@ -24,6 +24,8 @@ env/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.coverage
+**/.$*.drawio.bkp
 
 *.DS_Store
 .idea/
