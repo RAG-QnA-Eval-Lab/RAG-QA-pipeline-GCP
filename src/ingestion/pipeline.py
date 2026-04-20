@@ -1,0 +1,181 @@
+"""수집 + 인덱싱 파이프라인 오케스트레이션.
+
+사용법:
+    # 인덱스 빌드 (로컬)
+    python -m src.ingestion.pipeline --input data/policies/raw --output data/index
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import pickle
+from pathlib import Path
+
+import faiss
+import numpy as np
+
+from config.settings import settings
+from src.ingestion.chunker import Chunk, chunk_documents
+from src.ingestion.embedder import embed_texts
+from src.ingestion.loader import Document, load_directory
+
+logger = logging.getLogger(__name__)
+
+
+def build_index_from_directory(
+    input_dir: str | Path,
+    output_dir: str | Path,
+    chunk_size: int | None = None,
+    chunk_overlap: int | None = None,
+) -> dict:
+    """디렉토리의 정책 파일 → 청킹 → 임베딩 → FAISS 인덱스 빌드.
+
+    Returns:
+        빌드 결과 요약 dict.
+    """
+    input_dir = Path(input_dir)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    chunk_size = chunk_size or settings.chunk_size
+    chunk_overlap = chunk_overlap or settings.chunk_overlap
+
+    logger.info("문서 로드: %s", input_dir)
+    documents = load_directory(input_dir)
+    if not documents:
+        logger.warning("로드된 문서 없음")
+        return {"documents": 0, "chunks": 0, "index_built": False}
+
+    logger.info("청킹: %d문서 → chunk_size=%d, overlap=%d", len(documents), chunk_size, chunk_overlap)
+    chunks = chunk_documents(documents, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    if not chunks:
+        logger.warning("청크 생성 실패")
+        return {"documents": len(documents), "chunks": 0, "index_built": False}
+
+    logger.info("임베딩: %d청크", len(chunks))
+    texts = [c.content for c in chunks]
+    embeddings = embed_texts(texts)
+
+    logger.info("FAISS 인덱스 빌드")
+    index, metadata = _build_faiss_index(chunks, embeddings)
+
+    index_path = output_dir / "faiss.index"
+    metadata_path = output_dir / "metadata.pkl"
+
+    faiss.write_index(index, str(index_path))
+    with open(metadata_path, "wb") as f:
+        pickle.dump(metadata, f)
+
+    result = {
+        "documents": len(documents),
+        "chunks": len(chunks),
+        "embedding_dim": len(embeddings[0]) if embeddings else 0,
+        "index_path": str(index_path),
+        "metadata_path": str(metadata_path),
+        "index_built": True,
+    }
+    logger.info("인덱스 빌드 완료: %s", result)
+    return result
+
+
+def build_index_from_policies(
+    policies: list[dict],
+    output_dir: str | Path,
+    chunk_size: int | None = None,
+    chunk_overlap: int | None = None,
+) -> dict:
+    """Policy dict 리스트 → Document → 청킹 → 임베딩 → FAISS 인덱스."""
+    documents: list[Document] = []
+    for p in policies:
+        content = p.get("raw_content", "") or p.get("description", "") or p.get("summary", "")
+        if not content.strip():
+            continue
+        metadata = {
+            "policy_id": p.get("policy_id", ""),
+            "title": p.get("title", ""),
+            "category": p.get("category", ""),
+            "source": p.get("source_name", ""),
+        }
+        documents.append(Document(content=content.strip(), metadata=metadata))
+
+    if not documents:
+        return {"documents": 0, "chunks": 0, "index_built": False}
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    chunk_size = chunk_size or settings.chunk_size
+    chunk_overlap = chunk_overlap or settings.chunk_overlap
+
+    chunks = chunk_documents(documents, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    if not chunks:
+        return {"documents": len(documents), "chunks": 0, "index_built": False}
+
+    texts = [c.content for c in chunks]
+    embeddings = embed_texts(texts)
+
+    index, metadata = _build_faiss_index(chunks, embeddings)
+
+    index_path = output_dir / "faiss.index"
+    metadata_path = output_dir / "metadata.pkl"
+    faiss.write_index(index, str(index_path))
+    with open(metadata_path, "wb") as f:
+        pickle.dump(metadata, f)
+
+    return {
+        "documents": len(documents),
+        "chunks": len(chunks),
+        "embedding_dim": len(embeddings[0]),
+        "index_path": str(index_path),
+        "metadata_path": str(metadata_path),
+        "index_built": True,
+    }
+
+
+def _build_faiss_index(
+    chunks: list[Chunk],
+    embeddings: list[list[float]],
+) -> tuple[faiss.IndexFlatL2, list[dict]]:
+    """FAISS IndexFlatL2 빌드 + 메타데이터 dict 리스트."""
+    dim = len(embeddings[0])
+    vectors = np.array(embeddings, dtype=np.float32)
+
+    index = faiss.IndexFlatL2(dim)
+    index.add(vectors)
+
+    metadata = [
+        {"content": chunk.content, **chunk.metadata}
+        for chunk in chunks
+    ]
+    return index, metadata
+
+
+def save_policies_json(policies: list[dict], output_path: str | Path) -> Path:
+    """정책 dict 리스트를 JSON으로 저장."""
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(policies, f, ensure_ascii=False, indent=2)
+    logger.info("정책 JSON 저장: %s (%d건)", output_path, len(policies))
+    return output_path
+
+
+if __name__ == "__main__":
+    import argparse
+    from pathlib import Path as _Path
+
+    from dotenv import load_dotenv
+
+    load_dotenv(_Path(__file__).parent.parent.parent / ".env")
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+
+    parser = argparse.ArgumentParser(description="FAISS 인덱스 빌드")
+    parser.add_argument("--input", default="data/policies/raw", help="입력 디렉토리")
+    parser.add_argument("--output", default="data/index", help="출력 디렉토리")
+    parser.add_argument("--chunk-size", type=int, default=None)
+    parser.add_argument("--chunk-overlap", type=int, default=None)
+    args = parser.parse_args()
+
+    result = build_index_from_directory(args.input, args.output, args.chunk_size, args.chunk_overlap)
+    print(json.dumps(result, indent=2, ensure_ascii=False))
