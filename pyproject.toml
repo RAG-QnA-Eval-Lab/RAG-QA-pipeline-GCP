@@ -15,6 +15,7 @@ dependencies = [
     "python-dotenv>=1.0",
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
+    "tiktoken>=0.7",
     "google-cloud-storage>=2.18",
     "google-cloud-monitoring>=2.22",
 ]
