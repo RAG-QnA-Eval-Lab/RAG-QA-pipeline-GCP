@@ -3,6 +3,9 @@
 사용법:
     # 인덱스 빌드 (로컬)
     python -m src.ingestion.pipeline --input data/policies/raw --output data/index
+
+    # GCS 모드
+    python -m src.ingestion.pipeline --gcs --bucket rag-qna-eval-data
 """
 
 from __future__ import annotations
@@ -10,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import pickle
+import tempfile
 from pathlib import Path
 
 import faiss
@@ -150,6 +154,41 @@ def _build_faiss_index(
     return index, metadata
 
 
+def build_index_from_gcs(
+    bucket: str | None = None,
+    input_prefix: str = "policies/processed/",
+    output_prefix: str = "index/",
+    chunk_size: int | None = None,
+    chunk_overlap: int | None = None,
+) -> dict:
+    """GCS에서 정책 로드 → 인덱스 빌드 → GCS 업로드."""
+    from src.ingestion.gcs_client import GCSClient
+
+    bucket = bucket or settings.gcs_bucket
+    gcs = GCSClient(bucket)
+
+    input_path = f"{input_prefix}all_policies.json"
+    logger.info("GCS에서 정책 다운로드: gs://%s/%s", bucket, input_path)
+    policies = gcs.download_json(input_path)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp = Path(tmp_dir)
+        result = build_index_from_policies(policies, tmp, chunk_size, chunk_overlap)
+
+        if not result.get("index_built"):
+            logger.warning("인덱스 빌드 실패")
+            return result
+
+        gcs.upload_file(tmp / "faiss.index", f"{output_prefix}faiss.index")
+        gcs.upload_file(tmp / "metadata.pkl", f"{output_prefix}metadata.pkl")
+
+        result["gcs_index_path"] = f"gs://{bucket}/{output_prefix}faiss.index"
+        result["gcs_metadata_path"] = f"gs://{bucket}/{output_prefix}metadata.pkl"
+        logger.info("GCS 인덱스 업로드 완료: %s", result["gcs_index_path"])
+
+    return result
+
+
 def save_policies_json(policies: list[dict], output_path: str | Path) -> Path:
     """정책 dict 리스트를 JSON으로 저장."""
     output_path = Path(output_path)
@@ -171,11 +210,21 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
     parser = argparse.ArgumentParser(description="FAISS 인덱스 빌드")
-    parser.add_argument("--input", default="data/policies/raw", help="입력 디렉토리")
-    parser.add_argument("--output", default="data/index", help="출력 디렉토리")
+    parser.add_argument("--input", default="data/policies/raw", help="입력 디렉토리 (로컬 모드)")
+    parser.add_argument("--output", default="data/index", help="출력 디렉토리 (로컬 모드)")
+    parser.add_argument("--gcs", action="store_true", help="GCS 모드 (입출력 모두 GCS)")
+    parser.add_argument("--bucket", default=None, help="GCS 버킷명 (기본: settings.gcs_bucket)")
     parser.add_argument("--chunk-size", type=int, default=None)
     parser.add_argument("--chunk-overlap", type=int, default=None)
     args = parser.parse_args()
 
-    result = build_index_from_directory(args.input, args.output, args.chunk_size, args.chunk_overlap)
+    if args.gcs:
+        result = build_index_from_gcs(
+            bucket=args.bucket,
+            chunk_size=args.chunk_size,
+            chunk_overlap=args.chunk_overlap,
+        )
+    else:
+        result = build_index_from_directory(args.input, args.output, args.chunk_size, args.chunk_overlap)
+
     print(json.dumps(result, indent=2, ensure_ascii=False))

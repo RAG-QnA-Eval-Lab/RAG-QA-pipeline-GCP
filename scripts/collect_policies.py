@@ -1,8 +1,9 @@
-"""정책 수집 CLI — 수집기 → JSON 저장 + MongoDB 메타데이터.
+"""정책 수집 CLI — 수집기 → JSON 저장 + GCS 업로드 + MongoDB 메타데이터.
 
 사용법:
     python scripts/collect_policies.py --all
     python scripts/collect_policies.py --source data_portal --max-items 50
+    python scripts/collect_policies.py --all --skip-gcs --skip-mongo   # 로컬 테스트
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
+from config.settings import settings  # noqa: E402
 from src.ingestion.collectors.base import BaseCollector, policy_to_dict  # noqa: E402
 from src.ingestion.collectors.data_portal import DataPortalCollector  # noqa: E402
 from src.ingestion.pipeline import save_policies_json  # noqa: E402
@@ -27,7 +29,14 @@ COLLECTORS: dict[str, type[BaseCollector]] = {
 }
 
 
-def run_collection(source: str, max_items: int | None = None, output_dir: str = "data/policies/raw") -> None:
+def run_collection(
+    source: str,
+    max_items: int | None = None,
+    output_dir: str = "data/policies/raw",
+    *,
+    skip_gcs: bool = False,
+    skip_mongo: bool = False,
+) -> None:
     collector_cls = COLLECTORS.get(source)
     if not collector_cls:
         logger.error("알 수 없는 소스: %s (사용 가능: %s)", source, list(COLLECTORS.keys()))
@@ -42,10 +51,58 @@ def run_collection(source: str, max_items: int | None = None, output_dir: str = 
         return
 
     policy_dicts = [policy_to_dict(p) for p in valid_policies]
-    output_path = Path(output_dir) / f"{source}_policies.json"
-    save_policies_json(policy_dicts, output_path)
 
-    logger.info("수집 완료: %d건 저장 → %s", len(valid_policies), output_path)
+    # 1. 로컬 JSON 저장 (캐시)
+    local_path = Path(output_dir) / f"{source}_policies.json"
+    save_policies_json(policy_dicts, local_path)
+    logger.info("로컬 저장 완료: %d건 → %s", len(valid_policies), local_path)
+
+    # 2. GCS 업로드
+    gcs_uri = None
+    if not skip_gcs:
+        try:
+            from src.ingestion.gcs_client import GCSClient
+
+            gcs = GCSClient(settings.gcs_bucket)
+            gcs_path = f"policies/raw/{source}_policies.json"
+            gcs_uri = gcs.upload_json(gcs_path, policy_dicts)
+            logger.info("GCS 업로드 완료: %s", gcs_uri)
+        except Exception:
+            logger.exception("GCS 업로드 실패 — 로컬 파일은 저장됨")
+
+    # 3. MongoDB 메타데이터 upsert
+    if not skip_mongo:
+        try:
+            from src.ingestion.mongo_client import PolicyMetadataStore
+
+            mongo = PolicyMetadataStore()
+            gcs_raw_path = f"gs://{settings.gcs_bucket}/policies/raw/{source}_policies.json"
+            metadata_list = [
+                {
+                    "policy_id": p["policy_id"],
+                    "title": p["title"],
+                    "category": p.get("category", ""),
+                    "source_name": source,
+                    "gcs_path": gcs_raw_path,
+                    "status": "active",
+                }
+                for p in policy_dicts
+                if p.get("policy_id")
+            ]
+            upserted = mongo.upsert_policies_batch(metadata_list)
+            logger.info("MongoDB upsert 완료: %d건", upserted)
+
+            # 4. 수집 이력 기록
+            mongo.log_ingestion(
+                source=source,
+                collected_count=len(policy_dicts),
+                valid_count=len(valid_policies),
+                gcs_paths=[gcs_uri] if gcs_uri else [],
+            )
+            mongo.close()
+        except Exception:
+            logger.exception("MongoDB 연동 실패 — 로컬 파일은 저장됨")
+
     if errors:
         logger.warning("검증 오류 %d건", len(errors))
         for e in errors[:5]:
@@ -60,13 +117,27 @@ def main() -> None:
     parser.add_argument("--all", action="store_true", help="모든 소스 수집")
     parser.add_argument("--max-items", type=int, default=None, help="최대 수집 건수")
     parser.add_argument("--output-dir", default="data/policies/raw", help="출력 디렉토리")
+    parser.add_argument("--skip-gcs", action="store_true", help="GCS 업로드 건너뛰기 (로컬 테스트)")
+    parser.add_argument("--skip-mongo", action="store_true", help="MongoDB 연동 건너뛰기 (로컬 테스트)")
     args = parser.parse_args()
 
     if args.all:
         for source in COLLECTORS:
-            run_collection(source, max_items=args.max_items, output_dir=args.output_dir)
+            run_collection(
+                source,
+                max_items=args.max_items,
+                output_dir=args.output_dir,
+                skip_gcs=args.skip_gcs,
+                skip_mongo=args.skip_mongo,
+            )
     elif args.source:
-        run_collection(args.source, max_items=args.max_items, output_dir=args.output_dir)
+        run_collection(
+            args.source,
+            max_items=args.max_items,
+            output_dir=args.output_dir,
+            skip_gcs=args.skip_gcs,
+            skip_mongo=args.skip_mongo,
+        )
     else:
         parser.print_help()
         sys.exit(1)
