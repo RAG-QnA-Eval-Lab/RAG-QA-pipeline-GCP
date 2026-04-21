@@ -326,3 +326,234 @@ GCS 업로드                              GCS S3호환 API (boto3 + HMAC)
 7. **AWS 서빙 애플리케이션 코드는 캡스톤 팀원들이 자체 repo에서 개발**
 8. **Repo는 3개로 분리: GCP 파이프라인 / AWS 인프라 / 팀원 앱 코드**
 
+---
+
+## 13. GCP 인프라 상세 — 이 Repo에서 구축하는 것들
+
+이 섹션은 `RAG-QA-pipeline-GCP` repo가 실제로 사용하는 GCP 서비스와, repo 내 어떤 코드/파일이 각 인프라에 대응하는지를 정리한다.
+
+### 13.1 Cloud Storage (GCS)
+
+GCS는 이 시스템의 **실제 데이터 저장소**다. 정책 원본, 정제 데이터, FAISS 인덱스를 모두 여기에 보관한다.
+
+| 항목 | 값 |
+|------|-----|
+| 버킷 | `rag-qna-eval-data` |
+| 리전 | `asia-northeast3` (서울) |
+
+**저장 경로 구조**:
+
+```
+gs://rag-qna-eval-data/
+├── policies/
+│   ├── raw/                  ← 정책 원본 JSON
+│   └── processed/            ← 정제 데이터
+└── index/
+    ├── faiss.index            ← FAISS 벡터 인덱스
+    └── metadata.pkl           ← 인덱스 메타데이터 (chunk→정책 매핑)
+```
+
+**repo 코드 매핑**:
+
+- `src/ingestion/gcs_client.py` — `GCSClient` 클래스. upload_json, download_json, upload_file, download_file, list_blobs, exists, delete 메서드 제공.
+- `scripts/collect_policies.py` — 수집 완료 후 원본 데이터를 GCS에 업로드
+- `src/ingestion/pipeline.py` — FAISS 인덱스 빌드 후 GCS에 업로드 (`--gcs` 플래그)
+
+**AWS와의 공유 계약**:
+
+`index/faiss.index`와 `index/metadata.pkl`이 GCP↔AWS 간 유일한 공유 아티팩트다. AWS 측에서는 GCS의 S3 호환 API (boto3 + HMAC 키)를 통해 이 파일들을 다운로드한다.
+
+### 13.2 Compute Engine (e2-small)
+
+GCP VM 한 대에 MongoDB와 Grafana를 동시에 운영한다.
+
+| 항목 | 값 |
+|------|-----|
+| 인스턴스 타입 | e2-small |
+| 월 비용 | ~₩25,000 (GCP 크레딧으로 커버) |
+| 역할 | MongoDB (메타데이터 DB) + Grafana (모니터링 대시보드) |
+
+**MongoDB** (`rag_youth_policy` DB):
+
+| 컬렉션 | 용도 | 주요 필드 |
+|--------|------|----------|
+| `policies` | 정책 메타데이터 | policy_id, title, category, gcs_path, status |
+| `ingestion_logs` | 수집 이력 | source, collected_count, valid_count, status, gcs_paths |
+| `api_usage_logs` | LLM API 호출 이력 | model, tokens, cost, latency |
+
+repo 코드: `src/ingestion/mongo_client.py` — `PolicyMetadataStore` 클래스. upsert_policy, upsert_policies_batch, find_by_id, find_by_category, log_ingestion 등.
+
+접속: `MONGODB_URI=mongodb://VM_IP:27017` (`config/settings.py`의 Settings 클래스에서 관리)
+
+**Grafana**: 포트 3000에서 운영. Cloud Monitoring을 데이터소스로 연결하여 대시보드 구성.
+
+### 13.3 Cloud Run — 서비스 (scale-to-zero)
+
+실시간 서빙을 담당하는 상시 서비스 2개를 Cloud Run으로 운영한다.
+
+#### Cloud Run #1: BE (FastAPI)
+
+| 항목 | 값 |
+|------|-----|
+| 서비스명 | `rag-youth-policy-api` |
+| 메모리 | 2Gi (FAISS 인메모리 + Cross-Encoder 로드) |
+| Dockerfile | `Dockerfile` |
+| CMD | `uvicorn src.api.main:app --host 0.0.0.0 --port $PORT` |
+| 포트 | 8080 |
+
+repo 코드:
+
+- `src/api/main.py` — FastAPI 앱 엔트리 (현재 최소 스텁, `/health`만 구현)
+- `src/api/routes/` — 향후 구현: search.py, generate.py, policies.py, evaluate.py
+- `src/retrieval/` — 검색 파이프라인 (vector_only, bm25_only, hybrid, hybrid_rerank)
+- `src/generation/` — LLM 호출 + RAG 오케스트레이션
+
+CI/CD: `.github/workflows/deploy-api.yml` (push to main 시 자동 배포)
+
+환경변수: `GCS_BUCKET`, `MONGODB_URI`, `OPENAI_API_KEY`
+
+#### Cloud Run #2: FE (Streamlit)
+
+| 항목 | 값 |
+|------|-----|
+| 서비스명 | `rag-youth-policy-ui` |
+| 메모리 | 512Mi |
+| Dockerfile | `Dockerfile.ui` |
+| CMD | `streamlit run src/ui/app.py --server.port=8501` |
+| 포트 | 8501 |
+
+repo 코드: `src/ui/` (향후 Streamlit 프론트엔드 구현)
+
+CI/CD: `.github/workflows/deploy-ui.yml` (push to main 시 자동 배포)
+
+### 13.4 Cloud Run Jobs — 배치 작업
+
+트리거 기반으로 실행되는 배치 작업 2개를 Cloud Run Jobs로 운영한다.
+
+#### Collector Job
+
+| 항목 | 값 |
+|------|-----|
+| Job명 | `rag-collector` |
+| 메모리 | 512Mi |
+| Dockerfile | `Dockerfile.collector` |
+| CMD | `python scripts/collect_policies.py --all` |
+
+repo 코드:
+
+- `scripts/collect_policies.py` — 수집 CLI 엔트리포인트
+- `src/ingestion/collectors/base.py` — Policy frozen dataclass (정규화 스키마)
+- `src/ingestion/collectors/data_portal.py` — 공공데이터포털 수집기
+- `src/ingestion/gcs_client.py` — 수집 결과 GCS 업로드
+- `src/ingestion/mongo_client.py` — 메타데이터 MongoDB 저장
+
+환경변수: `DATA_PORTAL_API_KEY`, `GCS_BUCKET`, `MONGODB_URI`
+
+#### Indexer Job
+
+| 항목 | 값 |
+|------|-----|
+| Job명 | `rag-indexer` |
+| 메모리 | 2Gi |
+| Dockerfile | `Dockerfile.indexer` |
+| CMD | `python -m src.ingestion.pipeline --gcs` |
+
+repo 코드:
+
+- `src/ingestion/pipeline.py` — 인덱싱 오케스트레이션 (GCS에서 원본 로드 → 청킹 → 임베딩 → FAISS 빌드 → GCS 업로드)
+- `src/ingestion/loader.py` — PDF/TXT/JSON 로더
+- `src/ingestion/chunker.py` — 시맨틱 청킹 (정책 구조 인식, kss 한국어 문장 분리)
+- `src/ingestion/embedder.py` — OpenAI text-embedding-3-small (1536차원)
+
+환경변수: `OPENAI_API_KEY`, `GCS_BUCKET`
+
+CI/CD: `.github/workflows/deploy-jobs.yml` (collector + indexer 동시 배포)
+
+### 13.5 Artifact Registry
+
+| 항목 | 값 |
+|------|-----|
+| 레지스트리 | `asia-northeast3-docker.pkg.dev/rag-qna-eval/repo` |
+| 역할 | Docker 이미지 저장소 |
+| 이미지 4종 | `api`, `ui`, `collector`, `indexer` |
+
+GitHub Actions 워크플로에서 `docker build` + `docker push` 후 Cloud Run에 deploy한다.
+
+### 13.6 Cloud Scheduler (계획)
+
+| 항목 | 값 |
+|------|-----|
+| 역할 | 매일 1회 Collector Job 트리거 |
+| 구현 상태 | **계획 단계** (Secrets 등록 및 실배포 미완료) |
+
+### 13.7 Eventarc (계획)
+
+| 항목 | 값 |
+|------|-----|
+| 역할 | GCS 이벤트 → Indexer Job 자동 체이닝 |
+| 트리거 조건 | `policies/raw/` 경로에 새 파일 업로드 시 |
+| 구현 상태 | **계획 단계** |
+
+수집 → 인덱싱 자동화 체인: `Cloud Scheduler → Collector Job → GCS 업로드 → Eventarc → Indexer Job → GCS 인덱스 업로드`
+
+### 13.8 Cloud Monitoring + Cloud Logging
+
+- **Cloud Monitoring**: Cloud Run 기본 메트릭 (요청 수, 레이턴시, 에러율) + FastAPI 커스텀 메트릭 수집
+- **Cloud Logging**: 구조화 JSON 로그 (RAG 요청별 레이턴시/토큰/비용 추적)
+- **Grafana 연동**: Compute Engine VM의 Grafana (포트 3000)에서 Cloud Monitoring 데이터소스를 연결하여 통합 대시보드 구성
+
+### 13.9 CI/CD (GitHub Actions)
+
+이 repo에는 4개의 GitHub Actions 워크플로가 있다.
+
+| 워크플로 | 파일 | 트리거 | 대상 |
+|---------|------|--------|------|
+| CI (Lint + Test) | `.github/workflows/ci.yml` | PR → main | ruff + pytest |
+| Deploy BE | `.github/workflows/deploy-api.yml` | push main (`src/api/**`, `Dockerfile` 등) | Cloud Run `rag-youth-policy-api` |
+| Deploy FE | `.github/workflows/deploy-ui.yml` | push main (`src/ui/**`, `Dockerfile.ui`) | Cloud Run `rag-youth-policy-ui` |
+| Deploy Jobs | `.github/workflows/deploy-jobs.yml` | push main (`src/ingestion/**` 등) | Cloud Run Jobs `rag-collector`, `rag-indexer` |
+
+인증: `secrets.GCP_SA_KEY` (서비스 계정 JSON 키)
+
+### 13.10 Dockerfiles (4종)
+
+| Dockerfile | 용도 | 핵심 의존성 (extras) | 포트 |
+|-----------|------|---------------------|------|
+| `Dockerfile` | BE (FastAPI) | `.[api,ko]` | 8080 |
+| `Dockerfile.ui` | FE (Streamlit) | `.[ui,viz]` | 8501 |
+| `Dockerfile.collector` | 수집 Job | `.[crawl]` | — |
+| `Dockerfile.indexer` | 인덱싱 Job | `.[ko]` | — |
+
+모두 `python:3.11-slim` 베이스 이미지를 사용한다.
+
+### 13.11 설정 관리
+
+| 파일 | 역할 |
+|------|------|
+| `config/settings.py` | pydantic-settings 기반 Settings 클래스. `.env` 자동 로드. GCP 프로젝트/버킷, MongoDB URI, LLM API 키, 임베딩/청킹/검색 파라미터 |
+| `config/policy_sources.py` | 데이터 소스별 URL/API 설정 (온통청년, 공공데이터포털, 한국장학재단, PDF) |
+| `config/models.py` | LLM 모델 목록 (GPT-4o, Claude, Gemini, Llama3) |
+
+### 13.12 Repo 디렉토리 ↔ GCP 서비스 매핑 요약
+
+| repo 경로 | GCP 서비스 | 역할 |
+|----------|-----------|------|
+| `src/api/` | Cloud Run #1 (BE, 2Gi) | FastAPI 백엔드 — 검색/생성/평가 API |
+| `src/ui/` | Cloud Run #2 (FE, 512Mi) | Streamlit 프론트엔드 |
+| `src/ingestion/collectors/` | Cloud Run Job `rag-collector` | 정부 사이트 크롤러 |
+| `src/ingestion/pipeline.py` | Cloud Run Job `rag-indexer` | 청킹 → 임베딩 → FAISS 빌드 |
+| `src/ingestion/gcs_client.py` | Cloud Storage (GCS) | 데이터/인덱스 업로드·다운로드 |
+| `src/ingestion/mongo_client.py` | Compute Engine (MongoDB) | 메타데이터 CRUD |
+| `src/retrieval/` | Cloud Run #1 (BE) | 벡터/BM25/하이브리드 검색 |
+| `src/generation/` | Cloud Run #1 (BE) | LLM 호출 + RAG 오케스트레이션 |
+| `src/evaluation/` | Cloud Run #1 (BE) | RAGAS + LLM Judge + DeepEval |
+| `config/` | 전체 | 환경변수, 모델 목록, 소스 설정 |
+| `scripts/collect_policies.py` | Cloud Run Job `rag-collector` | 수집 CLI 엔트리포인트 |
+| `Dockerfile` | Artifact Registry → Cloud Run BE | BE 컨테이너 이미지 |
+| `Dockerfile.ui` | Artifact Registry → Cloud Run FE | FE 컨테이너 이미지 |
+| `Dockerfile.collector` | Artifact Registry → Cloud Run Job | 수집 Job 이미지 |
+| `Dockerfile.indexer` | Artifact Registry → Cloud Run Job | 인덱싱 Job 이미지 |
+| `.github/workflows/` | GitHub Actions → GCP 배포 | CI/CD 파이프라인 4종 |
+| `data/index/` | GCS `index/` | FAISS 인덱스 로컬 빌드 산출물 |
+| `data/eval/` | — | 평가 QA 데이터셋 (GCP 의존 없음) |
+
