@@ -8,6 +8,8 @@ build/
 
 .env
 .env.local
+sa-key*.json
+*-credentials.json
 
 *.index
 *.pkl

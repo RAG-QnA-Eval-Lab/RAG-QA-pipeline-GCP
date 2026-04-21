@@ -19,18 +19,33 @@ env:
 jobs:
   deploy-collector:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
       - uses: google-github-actions/setup-gcloud@v2
-      - name: Build and Deploy Collector Job
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+      - name: Ensure Artifact Registry repo exists
         run: |
-          gcloud builds submit \
-            --tag ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/collector:${{ github.sha }} \
+          gcloud artifacts repositories describe repo \
+            --location=${{ env.REGION }} --project=${{ env.PROJECT_ID }} 2>/dev/null || \
+          gcloud artifacts repositories create repo \
+            --repository-format=docker \
+            --location=${{ env.REGION }} \
+            --project=${{ env.PROJECT_ID }}
+      - name: Build and push Collector image
+        run: |
+          docker build \
+            -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/collector:${{ github.sha }} \
             -f Dockerfile.collector .
-
+          docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/collector:${{ github.sha }}
+      - name: Deploy Collector Job
+        run: |
           gcloud run jobs deploy rag-collector \
             --image ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/collector:${{ github.sha }} \
             --region ${{ env.REGION }} \
@@ -41,18 +56,33 @@ jobs:
 
   deploy-indexer:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
       - uses: google-github-actions/setup-gcloud@v2
-      - name: Build and Deploy Indexer Job
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+      - name: Ensure Artifact Registry repo exists
         run: |
-          gcloud builds submit \
-            --tag ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/indexer:${{ github.sha }} \
+          gcloud artifacts repositories describe repo \
+            --location=${{ env.REGION }} --project=${{ env.PROJECT_ID }} 2>/dev/null || \
+          gcloud artifacts repositories create repo \
+            --repository-format=docker \
+            --location=${{ env.REGION }} \
+            --project=${{ env.PROJECT_ID }}
+      - name: Build and push Indexer image
+        run: |
+          docker build \
+            -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/indexer:${{ github.sha }} \
             -f Dockerfile.indexer .
-
+          docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/indexer:${{ github.sha }}
+      - name: Deploy Indexer Job
+        run: |
           gcloud run jobs deploy rag-indexer \
             --image ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/indexer:${{ github.sha }} \
             --region ${{ env.REGION }} \

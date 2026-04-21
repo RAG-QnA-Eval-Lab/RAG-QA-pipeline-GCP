@@ -181,8 +181,12 @@ class TestBuildIndexFromGcs:
 
         upload_blob = MagicMock()
 
+        list_blob = MagicMock()
+        list_blob.name = "policies/raw/data_portal_policies.json"
+        mock_client.list_blobs.return_value = [list_blob]
+
         def blob_router(path):
-            if path == "policies/processed/all_policies.json":
+            if path == "policies/raw/data_portal_policies.json":
                 return download_blob
             return upload_blob
 

@@ -156,7 +156,7 @@ def _build_faiss_index(
 
 def build_index_from_gcs(
     bucket: str | None = None,
-    input_prefix: str = "policies/processed/",
+    input_prefix: str = "policies/raw/",
     output_prefix: str = "index/",
     chunk_size: int | None = None,
     chunk_overlap: int | None = None,
@@ -167,9 +167,21 @@ def build_index_from_gcs(
     bucket = bucket or settings.gcs_bucket
     gcs = GCSClient(bucket)
 
-    input_path = f"{input_prefix}all_policies.json"
-    logger.info("GCS에서 정책 다운로드: gs://%s/%s", bucket, input_path)
-    policies = gcs.download_json(input_path)
+    blobs = gcs.list_blobs(prefix=input_prefix)
+    json_blobs = [b for b in blobs if b.endswith(".json")]
+    if not json_blobs:
+        logger.error("GCS에 정책 파일 없음: gs://%s/%s*.json", bucket, input_prefix)
+        return {"index_built": False}
+
+    policies: list[dict] = []
+    for blob_path in json_blobs:
+        logger.info("GCS에서 정책 다운로드: gs://%s/%s", bucket, blob_path)
+        data = gcs.download_json(blob_path)
+        if isinstance(data, list):
+            policies.extend(data)
+        elif isinstance(data, dict) and "policies" in data:
+            policies.extend(data["policies"])
+    logger.info("총 %d건 정책 로드 (파일 %d개)", len(policies), len(json_blobs))
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
