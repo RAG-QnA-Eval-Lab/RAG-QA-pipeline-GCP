@@ -42,4 +42,7 @@ jobs:
           gcloud run deploy rag-youth-policy-api \
             --image ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/api:${{ github.sha }} \
             --region ${{ env.REGION }} \
-            --memory 2Gi
+            --memory 2Gi \
+            --set-env-vars "GCS_BUCKET=rag-qna-eval-data" \
+            --set-env-vars "MONGODB_URI=${{ secrets.MONGODB_URI }}" \
+            --set-env-vars "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}"
