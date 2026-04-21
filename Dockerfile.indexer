@@ -1,0 +1,14 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY pyproject.toml .
+RUN pip install --no-cache-dir ".[ko]"
+
+COPY config/ config/
+COPY src/__init__.py src/__init__.py
+COPY src/ingestion/ src/ingestion/
+
+ENV PYTHONPATH=/app
+
+CMD ["python", "-m", "src.ingestion.pipeline", "--gcs"]
