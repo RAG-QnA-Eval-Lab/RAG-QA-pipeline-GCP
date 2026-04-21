@@ -11,6 +11,7 @@ on:
       - "config/**"
       - "Dockerfile"
       - "pyproject.toml"
+  workflow_dispatch:
 
 env:
   PROJECT_ID: rag-qna-eval

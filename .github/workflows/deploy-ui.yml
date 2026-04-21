@@ -5,6 +5,7 @@ on:
     paths:
       - "src/ui/**"
       - "Dockerfile.ui"
+  workflow_dispatch:
 
 jobs:
   deploy:
