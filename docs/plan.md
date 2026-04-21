@@ -30,11 +30,12 @@ Phase 0                     P1         P2       P3       P4        P5         P6
                             ──────── QA 데이터셋 병행 작성 (50~100쌍) ────────
 ```
 
-**현재 진행 상황** (2026-04-20):
+**현재 진행 상황** (2026-04-21):
 - Phase 0: 완료 (일부 GCP 설정 잔여)
-- Phase 1: 코드 구현 완료 (테스트 62 passed). GCS/MongoDB 실데이터 연동 미완료
+- Phase 1: 코드 구현 완료 + GCS 클라이언트/파이프라인 연동 완료 (테스트 130 passed). GCS/MongoDB 실연결 미검증
 - Phase 2: 코드 구현 + 코드리뷰 + 버그 수정 완료 (테스트 20 passed, 전체 98 passed)
 - Phase 3: 코드 구현 완료 (테스트 21 passed, 전체 119 passed). LLM 실호출 미검증 (mock 테스트만)
+- GCP 배포: Dockerfile.collector/indexer + deploy-jobs.yml 작성 완료. Secrets 등록/실배포 미완료
 - Phase 4~6: 미착수 (`__init__.py` 스텁만 존재)
 
 ---
@@ -264,7 +265,7 @@ rag-youth-policy/                   # 개발 전용 레포 (별도)
 - [x] 도메인 확정 — 학생/청년 정부 정책 QnA
 - [x] 데이터 소스 접근성 검증
   - [x] 온통청년: 내부 검색 API (1,608건 JSON) + Open API 확인
-  - [x] 공공데이터포털: `한국고용정보원_온통청년_청년정책API` (15143273) 활용 신청 완료 (승인 대기)
+  - [x] 공공데이터포털: `한국고용정보원_온통청년_청년정책API` (15143273) 활용 신청 완료 (승인, .env에 등록 완료.)
   - [x] 한국장학재단: SSR HTML, BeautifulSoup 파싱 가능, k-skill 스키마 참고
   - [x] 온통청년 Open API 별도 발급 불필요 (공공데이터포털 경유 = 동일 데이터, JSON 응답)
 - [x] 레포 스켈레톤 세팅 — pyproject.toml, config/, src/, data/, tests/, Dockerfile, CI/CD
