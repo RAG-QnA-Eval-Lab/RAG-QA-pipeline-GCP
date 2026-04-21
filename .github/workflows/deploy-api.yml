@@ -12,19 +12,33 @@ on:
       - "Dockerfile"
       - "pyproject.toml"
 
+env:
+  PROJECT_ID: rag-qna-eval
+  REGION: asia-northeast3
+  REGISTRY: asia-northeast3-docker.pkg.dev
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
       - uses: google-github-actions/setup-gcloud@v2
-      - run: |
-          gcloud builds submit \
-            --tag asia-northeast3-docker.pkg.dev/rag-youth-policy/repo/api:${{ github.sha }}
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+      - name: Build and push API image
+        run: |
+          docker build \
+            -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/api:${{ github.sha }} .
+          docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/api:${{ github.sha }}
+      - name: Deploy API service
+        run: |
           gcloud run deploy rag-youth-policy-api \
-            --image asia-northeast3-docker.pkg.dev/rag-youth-policy/repo/api:${{ github.sha }} \
-            --region asia-northeast3 \
+            --image ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/api:${{ github.sha }} \
+            --region ${{ env.REGION }} \
             --memory 2Gi
