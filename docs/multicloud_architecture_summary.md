@@ -198,7 +198,7 @@ AWS는 **Online Serving Layer**로 정의한다.
 
 이 구조에서 사용자 본인은 **데이터 엔지니어링 담당**이다.
 
-### 데이터 엔지니어링 담당 범위
+### 데이터 엔지니어링 담당 범위 (본인)
 
 - 시나리오 테스트용 데이터 수집/구축
 - 원본 및 정제 데이터 스키마 설계
@@ -207,12 +207,22 @@ AWS는 **Online Serving Layer**로 정의한다.
 - 메타데이터 구조 설계
 - chunk-ready 문서 포맷 제공
 - index 생성에 필요한 입력 품질 관리
+- **GCP 데이터 파이프라인 구축 및 운영** (수집 → 청킹 → 임베딩 → FAISS 빌드)
+- **AWS 인프라 세팅** (ECS, ECR, CI/CD, 네트워크 등 뼈대만 구축)
 
-즉, 단순히 크롤링만 하는 것이 아니라,
+### 캡스톤 팀원 담당 범위
 
-> **RAG 품질의 입력을 설계하고 관리하는 역할**
+- `src/api/main.py` 및 API 라우트 개발
+- Streamlit UI 개발
+- 프롬프트 엔지니어링
+- RAG 파이프라인 서빙 로직
+- 평가 파이프라인 (RAGAS, LLM Judge, DeepEval)
+- AWS 서빙 애플리케이션 코드 전체
 
-에 가깝다.
+즉, 본인은
+
+> **GCP 데이터 파이프라인 + AWS 인프라 뼈대**를 담당하고,  
+> **AWS 서빙 애플리케이션 코드**는 캡스톤 팀원들이 개발한다.
 
 ---
 
@@ -254,7 +264,56 @@ AWS는 **Online Serving Layer**로 정의한다.
 
 ---
 
-## 11. 최종 결론
+## 11. Repo 분리 전략
+
+### 분리 이유
+
+GCP 데이터 파이프라인, AWS 인프라, AWS 서빙 애플리케이션은 각각 변경 주기와 담당자가 다르다. 역할별로 repo를 분리하면 CI/CD 충돌을 방지하고 책임 경계가 명확해진다.
+
+### Repo 구조 (3-repo)
+
+| Repo | 담당자 | 내용 |
+|------|--------|------|
+| `RAG-QA-pipeline-GCP` (현재) | 본인 | GCP 데이터 파이프라인 전체 (수집, 청킹, 임베딩, FAISS 빌드, GCS, MongoDB) + GCP BE/FE |
+| `RAG-QA-serving-AWS` (신규) | 본인 | AWS 인프라 관리 코드/스크립트 (CI/CD, ECS, ECR, 네트워크 등) |
+| 팀원 repo (별도) | 캡스톤 팀원 | LangChain/RAG 기반 서빙 애플리케이션 코드 |
+
+### `RAG-QA-serving-AWS` repo 구성 (본인 담당, 인프라 전용)
+
+- `.github/workflows/deploy-api.yml` — ECR + ECS Fargate BE 자동 배포
+- `.github/workflows/deploy-ui.yml` — ECR + ECS Fargate FE 자동 배포
+- `infra/task-definition-api.json` — ECS Task Definition (BE, 2Gi)
+- `infra/task-definition-ui.json` — ECS Task Definition (FE, 512Mi)
+- `Dockerfile`, `Dockerfile.ui` — 빌드 뼈대
+- `pyproject.toml` — 의존성 정의 (boto3 포함)
+- `.env.example` — 환경변수 문서화
+- GitHub Secrets 등록 (AWS 인증, GCS HMAC 키 등)
+- 네트워크/보안 설정 스크립트
+
+### 팀원 repo (캡스톤 팀원 담당, 애플리케이션 코드)
+
+- LangChain 기반 RAG 서빙 로직
+- FastAPI API 서버
+- Streamlit 프론트엔드
+- 프롬프트 엔지니어링
+- 평가 파이프라인 (RAGAS, LLM Judge, DeepEval)
+
+### FAISS 인덱스 전달 경로
+
+```
+GCP (이 repo)                          AWS (인프라 repo + 팀원 repo)
+Cloud Run Job → FAISS Build            ECS Container 기동
+    ↓                                       ↓
+GCS 업로드                              GCS S3호환 API (boto3 + HMAC)
+(index/faiss.index)                    → /tmp/index/ 다운로드
+(index/metadata.pkl)                   → RetrievalPipeline 로드
+```
+
+본인이 AWS 인프라 repo에서 배포 파이프라인을 세팅하면, 팀원들은 자기 repo에서 앱 코드를 개발하고 CI/CD를 통해 배포한다.
+
+---
+
+## 12. 최종 결론
 
 이번 논의 기준 최종 결론은 아래와 같다.
 
@@ -263,5 +322,7 @@ AWS는 **Online Serving Layer**로 정의한다.
 3. **AWS는 인덱스 로드 후 검색/서빙 담당**
 4. **FAISS build는 GCP, FAISS 2Gi load/search serving은 AWS**
 5. **모니터링은 AWS로 단일화**
-6. **데이터 엔지니어링 담당자는 GCP 파이프라인과 데이터 품질 설계의 owner로 보는 것이 적절하다**
+6. **데이터 엔지니어링 담당자는 GCP 파이프라인 + AWS 인프라 뼈대의 owner**
+7. **AWS 서빙 애플리케이션 코드는 캡스톤 팀원들이 자체 repo에서 개발**
+8. **Repo는 3개로 분리: GCP 파이프라인 / AWS 인프라 / 팀원 앱 코드**
 
