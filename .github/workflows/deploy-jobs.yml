@@ -1,0 +1,61 @@
+name: Deploy Cloud Run Jobs
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/ingestion/**"
+      - "scripts/collect_policies.py"
+      - "Dockerfile.collector"
+      - "Dockerfile.indexer"
+      - "config/**"
+      - "pyproject.toml"
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: rag-qna-eval
+  REGION: asia-northeast3
+  REGISTRY: asia-northeast3-docker.pkg.dev
+
+jobs:
+  deploy-collector:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Build and Deploy Collector Job
+        run: |
+          gcloud builds submit \
+            --tag ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/collector:${{ github.sha }} \
+            -f Dockerfile.collector .
+
+          gcloud run jobs deploy rag-collector \
+            --image ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/collector:${{ github.sha }} \
+            --region ${{ env.REGION }} \
+            --memory 512Mi \
+            --set-env-vars "DATA_PORTAL_API_KEY=${{ secrets.DATA_PORTAL_API_KEY }}" \
+            --set-env-vars "GCS_BUCKET=rag-qna-eval-data" \
+            --set-env-vars "MONGODB_URI=${{ secrets.MONGODB_URI }}"
+
+  deploy-indexer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Build and Deploy Indexer Job
+        run: |
+          gcloud builds submit \
+            --tag ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/indexer:${{ github.sha }} \
+            -f Dockerfile.indexer .
+
+          gcloud run jobs deploy rag-indexer \
+            --image ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/indexer:${{ github.sha }} \
+            --region ${{ env.REGION }} \
+            --memory 2Gi \
+            --set-env-vars "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" \
+            --set-env-vars "GCS_BUCKET=rag-qna-eval-data"
