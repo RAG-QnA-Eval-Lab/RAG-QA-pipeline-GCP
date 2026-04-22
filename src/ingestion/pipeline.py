@@ -23,6 +23,7 @@ from config.settings import settings
 from src.ingestion.chunker import Chunk, chunk_documents
 from src.ingestion.embedder import embed_texts
 from src.ingestion.loader import Document, load_directory
+from src.ingestion.utils import save_policies_json as save_policies_json
 
 logger = logging.getLogger(__name__)
 
@@ -199,16 +200,6 @@ def build_index_from_gcs(
         logger.info("GCS 인덱스 업로드 완료: %s", result["gcs_index_path"])
 
     return result
-
-
-def save_policies_json(policies: list[dict], output_path: str | Path) -> Path:
-    """정책 dict 리스트를 JSON으로 저장."""
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(policies, f, ensure_ascii=False, indent=2)
-    logger.info("정책 JSON 저장: %s (%d건)", output_path, len(policies))
-    return output_path
 
 
 if __name__ == "__main__":

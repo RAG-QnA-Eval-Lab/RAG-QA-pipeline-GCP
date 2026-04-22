@@ -20,7 +20,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 from config.settings import settings  # noqa: E402
 from src.ingestion.collectors.base import BaseCollector, policy_to_dict  # noqa: E402
 from src.ingestion.collectors.data_portal import DataPortalCollector  # noqa: E402
-from src.ingestion.pipeline import save_policies_json  # noqa: E402
+from src.ingestion.utils import save_policies_json  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

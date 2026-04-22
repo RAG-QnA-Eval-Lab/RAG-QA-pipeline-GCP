@@ -30,20 +30,16 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
-      - name: Ensure Artifact Registry repo exists
-        run: |
-          gcloud artifacts repositories describe repo \
-            --location=${{ env.REGION }} --project=${{ env.PROJECT_ID }} 2>/dev/null || \
-          gcloud artifacts repositories create repo \
-            --repository-format=docker \
-            --location=${{ env.REGION }} \
-            --project=${{ env.PROJECT_ID }}
+      - uses: docker/setup-buildx-action@v3
       - name: Build and push Collector image
-        run: |
-          docker build \
-            -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/collector:${{ github.sha }} \
-            -f Dockerfile.collector .
-          docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/collector:${{ github.sha }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.collector
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/collector:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       - name: Deploy Collector Job
         run: |
           gcloud run jobs deploy rag-collector \
@@ -67,20 +63,16 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
-      - name: Ensure Artifact Registry repo exists
-        run: |
-          gcloud artifacts repositories describe repo \
-            --location=${{ env.REGION }} --project=${{ env.PROJECT_ID }} 2>/dev/null || \
-          gcloud artifacts repositories create repo \
-            --repository-format=docker \
-            --location=${{ env.REGION }} \
-            --project=${{ env.PROJECT_ID }}
+      - uses: docker/setup-buildx-action@v3
       - name: Build and push Indexer image
-        run: |
-          docker build \
-            -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/indexer:${{ github.sha }} \
-            -f Dockerfile.indexer .
-          docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/indexer:${{ github.sha }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.indexer
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/indexer:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       - name: Deploy Indexer Job
         run: |
           gcloud run jobs deploy rag-indexer \

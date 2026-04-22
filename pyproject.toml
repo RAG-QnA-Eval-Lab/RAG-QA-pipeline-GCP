@@ -4,27 +4,35 @@ version = "0.1.0"
 description = "Hybrid RAG 기반 학생/청년 정부 정책 QnA 시스템 — 멀티 LLM 응답 신뢰성 비교 파이프라인"
 requires-python = ">=3.11"
 dependencies = [
-    "litellm>=1.50",
-    "faiss-cpu>=1.8",
-    "pymongo>=4.8",
-    "pymupdf>=1.24",
-    "rank-bm25>=0.2",
-    "sentence-transformers>=3.0",
-    "ragas>=0.4,<0.5",
-    "deepeval>=1.0",
     "python-dotenv>=1.0",
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
-    "tiktoken>=0.7",
-    "google-cloud-storage>=2.18",
-    "google-cloud-monitoring>=2.22",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.6"]
-viz = ["matplotlib>=3.8", "plotly>=5.0", "pandas>=2.0"]
+api = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "litellm>=1.50",
+    "faiss-cpu>=1.8",
+    "rank-bm25>=0.2",
+    "sentence-transformers>=3.0",
+]
+ingestion = [
+    "pymongo>=4.8",
+    "pymupdf>=1.24",
+    "tiktoken>=0.7",
+    "google-cloud-storage>=2.18",
+]
+indexer = [
+    "litellm>=1.50",
+    "faiss-cpu>=1.8",
+]
+eval = ["ragas>=0.4,<0.5", "deepeval>=1.0"]
+monitoring = ["google-cloud-monitoring>=2.22"]
 ko = ["kss>=6.0"]
-api = ["fastapi>=0.115", "uvicorn>=0.30"]
+viz = ["matplotlib>=3.8", "plotly>=5.0", "pandas>=2.0"]
 ui = ["streamlit>=1.38", "httpx>=0.27"]
 crawl = [
     "httpx>=0.27",

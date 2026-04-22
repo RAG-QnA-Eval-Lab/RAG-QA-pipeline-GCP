@@ -1,10 +1,9 @@
 FROM python:3.11-slim
 WORKDIR /app
 COPY pyproject.toml .
-RUN pip install --no-cache-dir ".[api,ko]"
+RUN pip install --no-cache-dir ".[api]"
 COPY config/ config/
 COPY src/ src/
-COPY data/eval/ data/eval/
 RUN mkdir -p data/results
 ENV PORT=8080
 EXPOSE 8080
