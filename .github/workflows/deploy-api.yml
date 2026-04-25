@@ -45,7 +45,5 @@ jobs:
             --image ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/api:${{ github.sha }} \
             --region ${{ env.REGION }} \
             --memory 2Gi \
-            --set-env-vars "GCS_BUCKET=rag-qna-eval-data" \
-            --set-env-vars "MONGODB_URI=${{ secrets.MONGODB_URI }}" \
-            --set-env-vars "VERTEXAI_PROJECT=rag-qna-eval" \
-            --set-env-vars "VERTEXAI_LOCATION=asia-northeast3"
+            --set-env-vars "GCS_BUCKET=rag-qna-eval-data,VERTEXAI_PROJECT=rag-qna-eval,VERTEXAI_LOCATION=asia-northeast3" \
+            --update-secrets "MONGODB_URI=mongodb-uri:latest"
