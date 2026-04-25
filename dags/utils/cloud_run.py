@@ -3,21 +3,28 @@
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_PROJECT = os.environ.get("GCP_PROJECT", "rag-qna-eval")
 
 
 def restart_cloud_run_service(
     service: str,
     region: str = "asia-northeast3",
-    project: str = "rag-qna-eval",
+    project: str | None = None,
 ) -> str:
     """Cloud Run 서비스에 새 revision 배포 (인덱스 재로드).
 
     Cloud Run은 새 revision이 뜨면 GCS에서 최신 인덱스를 다운로드한다.
     ``gcloud run services update`` 로 새 revision을 트리거한다.
     """
+    if project is None:
+        project = _DEFAULT_PROJECT
+
     cmd = [
         "gcloud",
         "run",
@@ -59,6 +66,4 @@ def restart_cloud_run_service(
 
 
 def _timestamp() -> str:
-    from datetime import datetime, timezone
-
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")

@@ -27,6 +27,9 @@ AIRFLOW_USER="airflow"
 REPO_URL="https://github.com/Daehyun-Bigbread/RAG-QA-pipeline-GCP.git"
 REPO_DIR="/opt/rag-pipeline"
 
+DB_PASSWORD="${AIRFLOW_DB_PASSWORD:?환경변수 AIRFLOW_DB_PASSWORD를 설정하세요}"
+ADMIN_PASSWORD="${AIRFLOW_ADMIN_PASSWORD:?환경변수 AIRFLOW_ADMIN_PASSWORD를 설정하세요}"
+
 echo "=== 1/7. 시스템 패키지 설치 ==="
 apt-get update -y
 apt-get install -y \
@@ -36,7 +39,7 @@ apt-get install -y \
 
 echo "=== 2/7. PostgreSQL 설정 ==="
 sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='airflow'" | grep -q 1 || \
-  sudo -u postgres psql -c "CREATE USER airflow WITH PASSWORD 'airflow';"
+  sudo -u postgres psql -v db_password="${DB_PASSWORD}" -c "CREATE USER airflow WITH PASSWORD :'db_password';"
 sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname='airflow'" | grep -q 1 || \
   sudo -u postgres psql -c "CREATE DATABASE airflow OWNER airflow;"
 
@@ -65,19 +68,19 @@ sudo -u ${AIRFLOW_USER} bash -c "
 
   # 프로젝트 패키지 (DAG에서 import 필요)
   cd ${REPO_DIR}
-  pip install -e '.[ingestion,indexer,ko]'
+  pip install -e '.[ingestion,indexer,ko,eval]'
 "
 
 echo "=== 6/7. Airflow 환경변수 + DB 초기화 ==="
 # 환경변수 설정 파일
-cat > ${AIRFLOW_HOME}/airflow.env << 'ENVEOF'
+cat > ${AIRFLOW_HOME}/airflow.env << ENVEOF
 AIRFLOW_HOME=/opt/airflow
 AIRFLOW__CORE__EXECUTOR=LocalExecutor
 AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
 AIRFLOW__CORE__LOAD_EXAMPLES=False
 AIRFLOW__CORE__DEFAULT_TIMEZONE=Asia/Seoul
 AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG=1
-AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@localhost:5432/airflow
+AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:${DB_PASSWORD}@localhost:5432/airflow
 AIRFLOW__WEBSERVER__WEB_SERVER_PORT=8080
 AIRFLOW__WEBSERVER__RBAC=True
 AIRFLOW__WEBSERVER__EXPOSE_CONFIG=False
@@ -85,8 +88,10 @@ AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL=60
 AIRFLOW__LOGGING__BASE_LOG_FOLDER=/opt/airflow/logs
 ENVEOF
 chown ${AIRFLOW_USER}:${AIRFLOW_USER} ${AIRFLOW_HOME}/airflow.env
+chmod 600 ${AIRFLOW_HOME}/airflow.env
 
-sudo -u ${AIRFLOW_USER} bash -c "
+export ADMIN_PASSWORD
+sudo -E -u ${AIRFLOW_USER} bash -c "
   set -a
   source ${AIRFLOW_HOME}/airflow.env
   set +a
@@ -98,7 +103,7 @@ sudo -u ${AIRFLOW_USER} bash -c "
     --lastname User \
     --role Admin \
     --email admin@example.com \
-    --password 1129
+    --password \"\${ADMIN_PASSWORD}\"
 "
 
 echo "=== 7/7. systemd 서비스 등록 ==="
@@ -156,7 +161,7 @@ systemctl start airflow-webserver airflow-scheduler
 echo ""
 echo "=== 설치 완료 ==="
 echo "Airflow UI: http://<VM_EXTERNAL_IP>:8080"
-echo "계정: admin / 1129"
+echo "계정: admin / <AIRFLOW_ADMIN_PASSWORD>"
 echo ""
 echo "DAG 동기화: 5분마다 git pull (${REPO_DIR})"
 echo "DAG 경로: ${AIRFLOW_HOME}/dags → ${REPO_DIR}/dags (심링크)"

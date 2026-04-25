@@ -7,10 +7,10 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 
+import pendulum
 from airflow.decorators import dag, task
-
 from utils.cloud_run import restart_cloud_run_service
 from utils.notifications import on_failure_callback
 
@@ -29,7 +29,7 @@ DEFAULT_ARGS = {
     default_args=DEFAULT_ARGS,
     description="정책 수집 → GCS 인덱스 빌드 → Cloud Run 재시작",
     schedule="0 17 * * *",
-    start_date=datetime(2026, 4, 25),
+    start_date=pendulum.datetime(2026, 4, 25, tz="Asia/Seoul"),
     catchup=False,
     tags=["ingestion", "daily"],
     max_active_runs=1,
@@ -48,7 +48,7 @@ def collect_and_index():
         return results
 
     @task()
-    def rebuild_index(collect_result: dict) -> dict:
+    def rebuild_index(collect_result: dict) -> dict:  # noqa: ARG001
         """GCS 원본 → 청킹 → 임베딩 → FAISS 인덱스 빌드 → GCS 업로드."""
         from src.ingestion.pipeline import build_index_from_gcs
 
@@ -65,7 +65,7 @@ def collect_and_index():
         return result
 
     @task()
-    def restart_api(index_result: dict) -> str:
+    def restart_api(index_result: dict) -> str:  # noqa: ARG001
         """Cloud Run API 서비스 재시작 — 새 인덱스 로드."""
         return restart_cloud_run_service(
             service="rag-youth-policy-api",
