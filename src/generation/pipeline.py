@@ -61,6 +61,7 @@ class RAGPipeline:
 
         sources = [
             {
+                "content": r.content,
                 "title": r.metadata.get("title", ""),
                 "category": r.metadata.get("category", ""),
                 "source_name": r.metadata.get("source_name", ""),
