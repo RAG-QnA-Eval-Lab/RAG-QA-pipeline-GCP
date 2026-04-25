@@ -14,4 +14,6 @@ jobs:
       - run: pip install -e ".[dev,api]"
       - run: ruff check .
       - run: ruff format --check .
+      - name: Validate DAG syntax
+        run: python -m py_compile dags/dag_collect_index.py dags/dag_evaluation.py dags/dag_qa_generation.py
       - run: pytest
