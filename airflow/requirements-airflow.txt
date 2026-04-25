@@ -1,0 +1,9 @@
+# Airflow 2.9.x + 필수 프로바이더
+apache-airflow==2.9.3
+apache-airflow-providers-google==10.21.0
+
+# Airflow DB 백엔드
+psycopg2-binary==2.9.9
+
+# 프로젝트 의존성 (DAG에서 import하는 패키지)
+# 나머지는 프로젝트 pyproject.toml에서 pip install -e ".[ingestion,indexer,ko]"
