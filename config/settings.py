@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     anthropic_api_key: str = ""
     google_api_key: str = ""
+    huggingface_api_key: str = ""
     data_portal_api_key: str = ""
     mongodb_uri: str = "mongodb://localhost:27017"
     mongodb_db: str = "rag_youth_policy"
@@ -19,20 +20,23 @@ class Settings(BaseSettings):
     gcs_bucket: str = "rag-qna-eval-data"
     api_base_url: str = ""
 
-    embedding_model: str = "text-embedding-3-small"
-    embedding_dim: int = 1536
+    vertexai_project: str = "rag-qna-eval"
+    vertexai_location: str = "asia-northeast3"
+
+    embedding_model: str = "vertex_ai/text-embedding-004"
+    embedding_dim: int = 768
     chunk_size: int = 512
     chunk_overlap: int = 50
     top_k: int = 10
     rerank_top_k: int = 5
-    default_model: str = "openai/gpt-4o-mini"
+    default_model: str = "vertex_ai/openai/gpt-4o-mini"
 
     model_config = {"env_file": ".env"}
 
     @model_validator(mode="after")
-    def _warn_missing_keys(self) -> Settings:
-        if not self.openai_api_key:
-            warnings.warn("OPENAI_API_KEY 미설정 — 임베딩/생성 실패 가능", stacklevel=2)
+    def _warn_missing_vertex_config(self) -> Settings:
+        if not self.vertexai_project:
+            warnings.warn("VERTEX_PROJECT 미설정 — Vertex AI 모델 호출 실패 가능", stacklevel=2)
         return self
 
 

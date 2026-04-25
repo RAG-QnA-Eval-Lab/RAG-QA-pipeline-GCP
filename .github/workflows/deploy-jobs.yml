@@ -79,5 +79,6 @@ jobs:
             --image ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/indexer:${{ github.sha }} \
             --region ${{ env.REGION }} \
             --memory 2Gi \
-            --set-env-vars "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" \
+            --set-env-vars "VERTEXAI_PROJECT=rag-qna-eval" \
+            --set-env-vars "VERTEXAI_LOCATION=asia-northeast3" \
             --set-env-vars "GCS_BUCKET=rag-qna-eval-data"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 
 import litellm
@@ -12,9 +13,15 @@ from litellm.exceptions import (
     RateLimitError,
 )
 
+from config.settings import settings
 from src.generation import LLMResponse
 
 logger = logging.getLogger(__name__)
+
+os.environ.setdefault("VERTEXAI_PROJECT", settings.vertexai_project)
+os.environ.setdefault("VERTEXAI_LOCATION", settings.vertexai_location)
+if settings.huggingface_api_key:
+    os.environ.setdefault("HUGGINGFACE_API_KEY", settings.huggingface_api_key)
 
 litellm.drop_params = True
 
@@ -24,7 +31,7 @@ _RETRY_BASE_DELAY = 1.0
 
 def generate(
     messages: list[dict[str, str]],
-    model: str = "openai/gpt-4o-mini",
+    model: str = "vertex_ai/openai/gpt-4o-mini",
     temperature: float = 0.0,
     max_tokens: int = 2048,
     timeout: float = 60.0,

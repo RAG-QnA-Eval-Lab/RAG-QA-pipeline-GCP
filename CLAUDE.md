@@ -97,7 +97,7 @@ python scripts/collect_policies.py --all                    # 정책 수집 → 
 python -m src.ingestion.pipeline --input data/policies/raw --output data/index  # 로컬 인덱스 빌드
 python -m src.ingestion.pipeline --gcs --bucket rag-qna-eval-data              # GCS 모드 인덱스 빌드
 python -m src.retrieval.pipeline --query "질문" --strategy hybrid_rerank       # 검색 테스트
-python -m src.generation.pipeline --query "질문" --model openai/gpt-4o-mini --strategy hybrid_rerank
+python -m src.generation.pipeline --query "질문" --model gemini-flash --strategy hybrid_rerank
 
 # BE (로컬)
 uvicorn src.api.main:app --host 0.0.0.0 --port 8000
@@ -113,7 +113,7 @@ docker build -t rag-youth-policy-ui -f Dockerfile.ui .    # FE (Streamlit)
 ## Key Technical Decisions
 
 - **RAGAS v0.4 only** (not v0.3). 온라인 예시 대부분 v0.3이므로 주의. `ragas>=0.4,<0.5` pinning 필수. `evaluate()` 대신 `metric.ascore()` 사용.
-- **LiteLLM** 으로 모델 전환. 모델 ID 형식: `openai/gpt-4o-mini`, `anthropic/claude-sonnet-4-20250514`, `gemini/gemini-2.0-flash`, `ollama/llama3.2`. 모델 정의는 `config/models.py`의 `MODELS` dict.
+- **LiteLLM + Vertex AI Model Garden** 으로 모델 통합. 모델 ID 형식: `vertex_ai/openai/gpt-4o-mini`, `vertex_ai/claude-sonnet-4-20250514`, `vertex_ai/gemini-2.0-flash`, `vertex_ai/meta/llama-3.1-405b-instruct-maas`. GCP SA 인증 통일, 비용 GCP 크레딧 통합 과금. 모델 정의는 `config/models.py`의 `MODELS` dict.
 - **FAISS (faiss-cpu)** + metadata dict (pickle). ChromaDB 대신 선택 — 경량, Cloud Run stateless 문제 없음.
 - **GCS** 실제 데이터 저장소. Cloud Run 기동 시 인덱스 다운로드. **MongoDB** 메타데이터 전용 (GCP VM).
 - **Hybrid Search**: Vector + BM25 → RRF (k=60) → Cross-Encoder rerank. `SearchStrategy` enum으로 4가지 전략 제어.
@@ -127,14 +127,16 @@ docker build -t rag-youth-policy-ui -f Dockerfile.ui .    # FE (Streamlit)
 ## Environment Variables (.env)
 
 ```
-OPENAI_API_KEY=
-ANTHROPIC_API_KEY=
-GOOGLE_API_KEY=
+# OPENAI_API_KEY=          # (deprecated — Vertex AI 경유 사용)
+# ANTHROPIC_API_KEY=       # (deprecated — Vertex AI 경유 사용)
+# GOOGLE_API_KEY=          # (deprecated — Vertex AI 경유 사용)
 DATA_PORTAL_API_KEY=     # 공공데이터포털 API
 MONGODB_URI=mongodb://MONGO_VM_IP:27017
 MONGODB_DB=rag_youth_policy
 GCP_PROJECT=rag-qna-eval
 GCS_BUCKET=rag-qna-eval-data
+VERTEXAI_PROJECT=rag-qna-eval    # Vertex AI Model Garden 프로젝트
+VERTEXAI_LOCATION=asia-northeast3 # Vertex AI 리전
 API_BASE_URL=                # FE → BE 통신 URL (Cloud Run 배포 시 설정)
 GCP_SA_KEY=                  # GitHub Actions 시크릿 (서비스 계정 JSON 키)
 ```

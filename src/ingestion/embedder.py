@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 
 import litellm
@@ -10,6 +11,9 @@ import litellm
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
+
+os.environ.setdefault("VERTEXAI_PROJECT", settings.vertexai_project)
+os.environ.setdefault("VERTEXAI_LOCATION", settings.vertexai_location)
 
 BATCH_SIZE = 100
 MAX_RETRIES = 3
@@ -24,7 +28,7 @@ def embed_texts(
     """텍스트 리스트를 임베딩 벡터로 변환.
 
     Returns:
-        각 텍스트에 대응하는 임베딩 벡터 리스트 (dim=1536 for text-embedding-3-small).
+        각 텍스트에 대응하는 임베딩 벡터 리스트 (dim=768 for text-embedding-004).
     """
     model = model or settings.embedding_model
     all_embeddings: list[list[float]] = []
