@@ -13,7 +13,6 @@ import logging
 import time
 from pathlib import Path
 
-from config.models import MODELS
 from config.settings import settings
 from src.generation import RAGResponse
 from src.generation.llm_client import generate
@@ -116,9 +115,9 @@ class RAGPipeline:
 
 def _resolve_model(model_key: str) -> str:
     """모델 키를 LiteLLM 모델 ID로 변환."""
-    if model_key in MODELS:
-        return str(MODELS[model_key]["id"])
-    return model_key
+    from config.models import resolve_model_key
+
+    return resolve_model_key(model_key) or model_key
 
 
 if __name__ == "__main__":
