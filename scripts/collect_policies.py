@@ -109,6 +109,31 @@ def run_collection(
             logger.warning("  - %s: %s", e["policy_id"], e["errors"])
 
 
+def run_all_collections(
+    max_items: int | None = None,
+    output_dir: str = "data/policies/raw",
+    *,
+    skip_gcs: bool = False,
+    skip_mongo: bool = False,
+) -> dict[str, str]:
+    """전체 소스 수집 실행. 소스별 성공/실패 결과 dict 반환."""
+    results: dict[str, str] = {}
+    for source in COLLECTORS:
+        try:
+            run_collection(
+                source,
+                max_items=max_items,
+                output_dir=output_dir,
+                skip_gcs=skip_gcs,
+                skip_mongo=skip_mongo,
+            )
+            results[source] = "success"
+        except Exception:
+            results[source] = "failed"
+            logger.exception("수집 실패: %s", source)
+    return results
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
@@ -122,14 +147,12 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.all:
-        for source in COLLECTORS:
-            run_collection(
-                source,
-                max_items=args.max_items,
-                output_dir=args.output_dir,
-                skip_gcs=args.skip_gcs,
-                skip_mongo=args.skip_mongo,
-            )
+        run_all_collections(
+            max_items=args.max_items,
+            output_dir=args.output_dir,
+            skip_gcs=args.skip_gcs,
+            skip_mongo=args.skip_mongo,
+        )
     elif args.source:
         run_collection(
             args.source,

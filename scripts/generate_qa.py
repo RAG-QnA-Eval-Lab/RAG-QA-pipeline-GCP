@@ -253,7 +253,7 @@ def generate_qa_for_policy(
     policy: dict,
     qa_count: int,
     difficulties: list[str],
-    model: str = "vertex_ai/openai/gpt-4o-mini",
+    model: str = "vertex_ai/gemini-2.5-flash",
 ) -> list[dict] | None:
     """단일 정책에서 QA 쌍 생성."""
     messages = build_qa_prompt(policy, qa_count, difficulties)
@@ -305,7 +305,7 @@ def generate_qa_dataset(
     policies_path: Path,
     output_path: Path,
     target_count: int = 100,
-    model: str = "vertex_ai/openai/gpt-4o-mini",
+    model: str = "vertex_ai/gemini-2.5-flash",
     min_richness: int = 4,
     *,
     dry_run: bool = False,
@@ -385,7 +385,7 @@ def main() -> None:
         help="출력 JSON 경로",
     )
     parser.add_argument("--count", type=int, default=100, help="목표 QA 쌍 수")
-    parser.add_argument("--model", default="vertex_ai/openai/gpt-4o-mini", help="LiteLLM 모델 ID")
+    parser.add_argument("--model", default="vertex_ai/gemini-2.5-flash", help="LiteLLM 모델 ID")
     parser.add_argument("--dry-run", action="store_true", help="API 호출 없이 선택 정책만 확인")
     parser.add_argument("--min-richness", type=int, default=4, help="최소 콘텐츠 풍부도 점수")
     parser.add_argument("--seed", type=int, default=42, help="랜덤 시드")
