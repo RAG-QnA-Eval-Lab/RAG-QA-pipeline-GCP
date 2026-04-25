@@ -71,23 +71,25 @@ sudo -u ${AIRFLOW_USER} bash -c "
 echo "=== 6/7. Airflow 환경변수 + DB 초기화 ==="
 # 환경변수 설정 파일
 cat > ${AIRFLOW_HOME}/airflow.env << 'ENVEOF'
-export AIRFLOW_HOME=/opt/airflow
-export AIRFLOW__CORE__EXECUTOR=LocalExecutor
-export AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
-export AIRFLOW__CORE__LOAD_EXAMPLES=False
-export AIRFLOW__CORE__DEFAULT_TIMEZONE=Asia/Seoul
-export AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG=1
-export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@localhost:5432/airflow
-export AIRFLOW__WEBSERVER__WEB_SERVER_PORT=8080
-export AIRFLOW__WEBSERVER__RBAC=True
-export AIRFLOW__WEBSERVER__EXPOSE_CONFIG=False
-export AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL=60
-export AIRFLOW__LOGGING__BASE_LOG_FOLDER=/opt/airflow/logs
+AIRFLOW_HOME=/opt/airflow
+AIRFLOW__CORE__EXECUTOR=LocalExecutor
+AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+AIRFLOW__CORE__LOAD_EXAMPLES=False
+AIRFLOW__CORE__DEFAULT_TIMEZONE=Asia/Seoul
+AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG=1
+AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@localhost:5432/airflow
+AIRFLOW__WEBSERVER__WEB_SERVER_PORT=8080
+AIRFLOW__WEBSERVER__RBAC=True
+AIRFLOW__WEBSERVER__EXPOSE_CONFIG=False
+AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL=60
+AIRFLOW__LOGGING__BASE_LOG_FOLDER=/opt/airflow/logs
 ENVEOF
 chown ${AIRFLOW_USER}:${AIRFLOW_USER} ${AIRFLOW_HOME}/airflow.env
 
 sudo -u ${AIRFLOW_USER} bash -c "
+  set -a
   source ${AIRFLOW_HOME}/airflow.env
+  set +a
   source ${AIRFLOW_HOME}/venv/bin/activate
   airflow db migrate
   airflow users create \

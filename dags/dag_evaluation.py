@@ -14,7 +14,7 @@ from pathlib import Path
 from airflow.decorators import dag, task
 from airflow.models.param import Param
 
-from dags.utils.notifications import on_failure_callback
+from utils.notifications import on_failure_callback
 
 logger = logging.getLogger(__name__)
 

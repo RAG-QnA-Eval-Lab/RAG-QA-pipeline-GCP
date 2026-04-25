@@ -11,8 +11,8 @@ from datetime import datetime, timedelta
 
 from airflow.decorators import dag, task
 
-from dags.utils.cloud_run import restart_cloud_run_service
-from dags.utils.notifications import on_failure_callback
+from utils.cloud_run import restart_cloud_run_service
+from utils.notifications import on_failure_callback
 
 logger = logging.getLogger(__name__)
 
