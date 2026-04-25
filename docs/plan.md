@@ -31,7 +31,7 @@ Phase 0                     P1         P2       P3       P4        P5         P6
 ```
 
 **현재 진행 상황** (2026-04-25):
-- Phase 0: 완료 (예산 알림/Airflow VM 세팅 잔여)
+- Phase 0: 완료 (예산 알림 ₩200,000 잔여). Airflow VM 세팅 완료 (e2-standard-2, Airflow 2.9.3 + PostgreSQL 16 + 3 DAGs 배포)
 - Phase 1: 코드 구현 완료. 정책 2,235건 수집 (data_portal 2,185 + youthgo 50). FAISS 인덱스 빌드 완료 (16.5MB + metadata 3MB). GCS/MongoDB 실연결 미검증
 - Phase 2: 코드 구현 + 코드리뷰 + 버그 수정 완료
 - Phase 3: 코드 구현 완료. Vertex AI Model Garden + HuggingFace 전환 완료. LLM 실호출 미검증 (mock 테스트만)
@@ -244,7 +244,7 @@ rag-youth-policy/                   # 개발 전용 레포 (별도)
 - [x] MongoDB Compass 원격 연결 확인 완료 (34.50.21.132:27017)
 - [x] QA 데이터셋 MongoDB 업로드 완료 (`scripts/upload_qa_to_mongo.py` → `rag_youth_policy.qa_pairs` 컬렉션, 메타데이터 1건 + QA 100건)
 - [x] GCS 버킷 생성 — `gs://rag-qna-eval-data` (asia-northeast3, STANDARD)
-- [ ] Compute Engine VM 생성 — `rag-airflow-vm` (e2-standard-2, asia-northeast3-a, 30GB) — Airflow 워크플로 오케스트레이션
+- [x] Compute Engine VM 생성 — `rag-airflow-vm` (e2-standard-2, Ubuntu 24.04 LTS, asia-northeast3-a, 30GB) — Airflow 2.9.3 + PostgreSQL 16 + LocalExecutor + 3 DAGs 배포 완료
 - [ ] 예산 알림 ₩200,000 설정
 - [ ] Gemini API 키 발급 (₩71,504 크레딧 활용)
 
@@ -282,7 +282,7 @@ rag-youth-policy/                   # 개발 전용 레포 (별도)
   - [x] API 활성화: Compute Engine, Cloud Run, Artifact Registry, Cloud Build, Cloud Scheduler, Monitoring, Logging, Vertex AI, Eventarc
   - [x] GCS 버킷: `gs://rag-qna-eval-data` (asia-northeast3)
   - [x] VM: `rag-mongo-vm` (e2-small, 중지 상태 — Phase 1에서 시작)
-  - [ ] VM: `rag-airflow-vm` (e2-standard-2) — Airflow 오케스트레이션 (Cloud Scheduler + Eventarc 대체)
+  - [x] VM: `rag-airflow-vm` (e2-standard-2, Ubuntu 24.04 LTS) — Airflow 2.9.3 + PostgreSQL 16 + 3 DAGs (collect_and_index, evaluation_pipeline, qa_generation)
   - [ ] 예산 알림 ₩200,000 설정
 - [x] 멀티클라우드 전략 문서화 — `docs/multi-cloud.md` (캡스톤 팀 AWS 연동)
 - [x] 초기 데이터 50건 수집 테스트 — 온통청년 내부 API, 50건 수집, 주요 필드 채움률 100%
