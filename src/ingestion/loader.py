@@ -100,7 +100,11 @@ def load_directory(dir_path: str | Path) -> list[Document]:
     loaders = {".json": load_json, ".pdf": load_pdf, ".txt": load_txt}
     documents: list[Document] = []
 
-    for file_path in sorted(dir_path.iterdir()):
+    all_files = [path for path in sorted(dir_path.rglob("*")) if path.is_file()]
+    latest_jsons = [path for path in all_files if path.suffix.lower() == ".json" and path.name == "latest.json"]
+    file_candidates = latest_jsons if latest_jsons else all_files
+
+    for file_path in file_candidates:
         loader = loaders.get(file_path.suffix.lower())
         if loader:
             try:

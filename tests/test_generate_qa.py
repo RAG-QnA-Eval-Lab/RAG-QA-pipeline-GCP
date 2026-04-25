@@ -18,6 +18,7 @@ sys.path.insert(0, str(sys_path_fix))
 from scripts.generate_qa import (
     assemble_output,
     build_qa_prompt,
+    load_qa_prompt,
     load_policies,
     parse_qa_response,
     plan_difficulty_assignments,
@@ -185,16 +186,30 @@ class TestPlanDifficultyAssignments:
 class TestBuildQaPrompt:
     def test_includes_policy_content(self) -> None:
         p = _make_policy(title="청년 주거 지원", raw_content="지원 내용 상세")
-        msgs = build_qa_prompt(p, 2, ["easy", "medium"])
+        msgs = build_qa_prompt(p, 2, ["easy", "medium"], "system prompt")
         assert len(msgs) == 2
         assert msgs[0]["role"] == "system"
+        assert msgs[0]["content"] == "system prompt"
         assert "청년 주거 지원" in msgs[1]["content"]
         assert "easy 1개" in msgs[1]["content"]
 
     def test_truncates_long_content(self) -> None:
         p = _make_policy(raw_content="가" * 5000)
-        msgs = build_qa_prompt(p, 2, ["easy", "medium"])
+        msgs = build_qa_prompt(p, 2, ["easy", "medium"], "system prompt")
         assert len(msgs[1]["content"]) < 5000
+
+
+class TestLoadQaPrompt:
+    @patch("scripts.generate_qa.GCSClient")
+    def test_loads_prompt_from_gcs(self, mock_gcs_cls) -> None:
+        mock_gcs = mock_gcs_cls.return_value
+        mock_gcs.download_text.return_value = "prompt body"
+
+        prompt, metadata = load_qa_prompt()
+
+        assert prompt == "prompt body"
+        assert metadata["gcs_uri"].endswith("/prompts/qa_generation_system.txt")
+        assert len(metadata["sha256"]) == 64
 
 
 class TestAssembleOutput:
@@ -215,10 +230,11 @@ class TestAssembleOutput:
                 "reference_source": "data_portal",
             },
         ]
-        result = assemble_output(pairs, "openai/gpt-4o-mini")
+        result = assemble_output(pairs, "openai/gpt-4o-mini", {"gcs_uri": "gs://bucket/prompts/x.txt", "sha256": "abc"})
         assert result["version"] == "1.0"
         assert result["total_count"] == 2
         assert result["domain"] == "youth_policy"
+        assert result["prompt"]["gcs_uri"] == "gs://bucket/prompts/x.txt"
         assert set(result["categories"]) == {"housing", "employment"}
 
     def test_sequential_ids(self) -> None:
@@ -229,7 +245,7 @@ class TestAssembleOutput:
              "reference_doc": "d", "reference_source": "s"}
             for i in range(5)
         ]
-        result = assemble_output(pairs, "m")
+        result = assemble_output(pairs, "m", {"gcs_uri": "gs://bucket/prompts/x.txt", "sha256": "abc"})
         ids = [s["id"] for s in result["samples"]]
         assert ids == ["q001", "q002", "q003", "q004", "q005"]
 
@@ -245,16 +261,17 @@ class TestGenerateQaForPolicy:
         )
         with patch("scripts.generate_qa.generate", return_value=mock_resp):
             result = generate_qa_for_policy(
-                _make_policy(), qa_count=1, difficulties=["easy"],
+                _make_policy(), qa_count=1, difficulties=["easy"], system_prompt="prompt",
             )
         assert result is not None
         assert len(result) == 1
         assert result[0]["category"] == "housing"
         assert result[0]["policy_title"] == "테스트 정책"
+        assert result[0]["reference_doc"] == "data_portal/latest.json"
 
     def test_failure(self) -> None:
         with patch("scripts.generate_qa.generate", side_effect=RuntimeError("API error")):
             result = generate_qa_for_policy(
-                _make_policy(), qa_count=1, difficulties=["easy"],
+                _make_policy(), qa_count=1, difficulties=["easy"], system_prompt="prompt",
             )
         assert result is None

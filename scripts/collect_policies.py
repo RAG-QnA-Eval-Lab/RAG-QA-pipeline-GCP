@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -20,6 +21,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 from config.settings import settings  # noqa: E402
 from src.ingestion.collectors.base import BaseCollector, policy_to_dict  # noqa: E402
 from src.ingestion.collectors.data_portal import DataPortalCollector  # noqa: E402
+from src.ingestion.policy_store import rebuild_policy_views_from_raw  # noqa: E402
 from src.ingestion.utils import save_policies_json  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -27,6 +29,17 @@ logger = logging.getLogger(__name__)
 COLLECTORS: dict[str, type[BaseCollector]] = {
     "data_portal": DataPortalCollector,
 }
+
+
+def _timestamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _raw_storage_paths(output_dir: str | Path, source: str) -> tuple[Path, Path]:
+    root = Path(output_dir) / source
+    latest_path = root / "latest.json"
+    snapshot_path = root / "snapshots" / f"{_timestamp()}.json"
+    return latest_path, snapshot_path
 
 
 def run_collection(
@@ -51,11 +64,18 @@ def run_collection(
         return
 
     policy_dicts = [policy_to_dict(p) for p in valid_policies]
+    latest_path, snapshot_path = _raw_storage_paths(output_dir, source)
+    relative_raw_path = str(latest_path.relative_to(Path(output_dir)))
+    for policy in policy_dicts:
+        policy["raw_path"] = relative_raw_path
 
     # 1. 로컬 JSON 저장 (캐시)
-    local_path = Path(output_dir) / f"{source}_policies.json"
-    save_policies_json(policy_dicts, local_path)
-    logger.info("로컬 저장 완료: %d건 → %s", len(valid_policies), local_path)
+    save_policies_json(policy_dicts, latest_path)
+    save_policies_json(policy_dicts, snapshot_path)
+    logger.info("로컬 저장 완료: %d건 → %s (snapshot: %s)", len(valid_policies), latest_path, snapshot_path)
+
+    derived_paths = rebuild_policy_views_from_raw(Path(output_dir), Path(output_dir).parent)
+    logger.info("정규화 데이터 재생성 완료: %s", derived_paths["all_policies_path"])
 
     # 2. GCS 업로드
     gcs_uri = None
@@ -64,9 +84,27 @@ def run_collection(
             from src.ingestion.gcs_client import GCSClient
 
             gcs = GCSClient(settings.gcs_bucket)
-            gcs_path = f"policies/raw/{source}_policies.json"
-            gcs_uri = gcs.upload_json(gcs_path, policy_dicts)
+            gcs_latest_path = f"policies/raw/{source}/latest.json"
+            gcs_snapshot_path = f"policies/raw/{source}/snapshots/{snapshot_path.name}"
+            gcs_uri = gcs.upload_json(gcs_latest_path, policy_dicts)
+            gcs.upload_json(gcs_snapshot_path, policy_dicts)
             logger.info("GCS 업로드 완료: %s", gcs_uri)
+
+            normalized_paths = [
+                ("policies/processed/all_policies.json", derived_paths["all_policies_path"]),
+                ("policies/processed/manifest.json", derived_paths["manifest_path"]),
+            ]
+            normalized_paths.extend(
+                (f"policies/processed/by_source/{name}.json", path)
+                for name, path in derived_paths["by_source_paths"].items()
+            )
+            normalized_paths.extend(
+                (f"policies/processed/by_category/{name}.json", path)
+                for name, path in derived_paths["by_category_paths"].items()
+            )
+
+            for remote_path, local_file in normalized_paths:
+                gcs.upload_file(Path(local_file), remote_path)
         except Exception:
             logger.exception("GCS 업로드 실패 — 로컬 파일은 저장됨")
 
@@ -76,7 +114,7 @@ def run_collection(
             from src.ingestion.mongo_client import PolicyMetadataStore
 
             mongo = PolicyMetadataStore()
-            gcs_raw_path = f"gs://{settings.gcs_bucket}/policies/raw/{source}_policies.json"
+            gcs_raw_path = f"gs://{settings.gcs_bucket}/policies/raw/{source}/latest.json"
             metadata_list = [
                 {
                     "policy_id": p["policy_id"],
@@ -84,6 +122,7 @@ def run_collection(
                     "category": p.get("category", ""),
                     "source_name": source,
                     "gcs_path": gcs_raw_path,
+                    "raw_path": p.get("raw_path", ""),
                     "status": "active",
                 }
                 for p in policy_dicts

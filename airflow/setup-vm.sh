@@ -26,9 +26,70 @@ AIRFLOW_HOME="/opt/airflow"
 AIRFLOW_USER="airflow"
 REPO_URL="https://github.com/Daehyun-Bigbread/RAG-QA-pipeline-GCP.git"
 REPO_DIR="/opt/rag-pipeline"
+GCP_PROJECT="${GCP_PROJECT:-rag-qna-eval}"
+GCS_BUCKET="${GCS_BUCKET:-rag-qna-eval-data}"
+VERTEXAI_PROJECT="${VERTEXAI_PROJECT:-rag-qna-eval}"
+VERTEXAI_LOCATION="${VERTEXAI_LOCATION:-asia-northeast3}"
 
-DB_PASSWORD="${AIRFLOW_DB_PASSWORD:?환경변수 AIRFLOW_DB_PASSWORD를 설정하세요}"
-ADMIN_PASSWORD="${AIRFLOW_ADMIN_PASSWORD:?환경변수 AIRFLOW_ADMIN_PASSWORD를 설정하세요}"
+AIRFLOW_DB_PASSWORD_SECRET="${AIRFLOW_DB_PASSWORD_SECRET:-airflow-db-password}"
+AIRFLOW_ADMIN_PASSWORD_SECRET="${AIRFLOW_ADMIN_PASSWORD_SECRET:-airflow-admin-password}"
+MONGODB_URI_SECRET="${MONGODB_URI_SECRET:-mongodb-uri}"
+DATA_PORTAL_API_KEY_SECRET="${DATA_PORTAL_API_KEY_SECRET:-data-portal-api-key}"
+OPENAI_API_KEY_SECRET="${OPENAI_API_KEY_SECRET:-openai-api-key}"
+HUGGINGFACE_API_KEY_SECRET="${HUGGINGFACE_API_KEY_SECRET:-huggingface-api-key}"
+
+require_command() {
+  local cmd="$1"
+  if ! command -v "${cmd}" >/dev/null 2>&1; then
+    echo "필수 명령 없음: ${cmd}" >&2
+    exit 1
+  fi
+}
+
+read_secret() {
+  local secret_name="$1"
+  gcloud secrets versions access latest \
+    --secret="${secret_name}" \
+    --project="${GCP_PROJECT}" \
+    2>/dev/null
+}
+
+read_optional_secret() {
+  local secret_name="$1"
+  gcloud secrets versions access latest \
+    --secret="${secret_name}" \
+    --project="${GCP_PROJECT}" \
+    2>/dev/null || true
+}
+
+shell_escape() {
+  printf "%q" "$1"
+}
+
+require_command gcloud
+
+DB_PASSWORD="$(read_secret "${AIRFLOW_DB_PASSWORD_SECRET}")"
+ADMIN_PASSWORD="$(read_secret "${AIRFLOW_ADMIN_PASSWORD_SECRET}")"
+MONGODB_URI="$(read_secret "${MONGODB_URI_SECRET}")"
+DATA_PORTAL_API_KEY="$(read_secret "${DATA_PORTAL_API_KEY_SECRET}")"
+OPENAI_API_KEY="$(read_optional_secret "${OPENAI_API_KEY_SECRET}")"
+HUGGINGFACE_API_KEY="$(read_optional_secret "${HUGGINGFACE_API_KEY_SECRET}")"
+
+: "${DB_PASSWORD:?Secret Manager에서 Airflow DB 비밀번호를 읽지 못했습니다.}"
+: "${ADMIN_PASSWORD:?Secret Manager에서 Airflow 관리자 비밀번호를 읽지 못했습니다.}"
+: "${MONGODB_URI:?Secret Manager에서 MongoDB URI를 읽지 못했습니다.}"
+: "${DATA_PORTAL_API_KEY:?Secret Manager에서 공공데이터포털 API 키를 읽지 못했습니다.}"
+
+SQL_ALCHEMY_CONN="postgresql+psycopg2://airflow:${DB_PASSWORD}@localhost:5432/airflow"
+SQL_ALCHEMY_CONN_ESCAPED="$(shell_escape "${SQL_ALCHEMY_CONN}")"
+GCP_PROJECT_ESCAPED="$(shell_escape "${GCP_PROJECT}")"
+GCS_BUCKET_ESCAPED="$(shell_escape "${GCS_BUCKET}")"
+VERTEXAI_PROJECT_ESCAPED="$(shell_escape "${VERTEXAI_PROJECT}")"
+VERTEXAI_LOCATION_ESCAPED="$(shell_escape "${VERTEXAI_LOCATION}")"
+MONGODB_URI_ESCAPED="$(shell_escape "${MONGODB_URI}")"
+DATA_PORTAL_API_KEY_ESCAPED="$(shell_escape "${DATA_PORTAL_API_KEY}")"
+OPENAI_API_KEY_ESCAPED="$(shell_escape "${OPENAI_API_KEY}")"
+HUGGINGFACE_API_KEY_ESCAPED="$(shell_escape "${HUGGINGFACE_API_KEY}")"
 
 echo "=== 1/7. 시스템 패키지 설치 ==="
 apt-get update -y
@@ -80,12 +141,20 @@ AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
 AIRFLOW__CORE__LOAD_EXAMPLES=False
 AIRFLOW__CORE__DEFAULT_TIMEZONE=Asia/Seoul
 AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG=1
-AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:${DB_PASSWORD}@localhost:5432/airflow
+AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=${SQL_ALCHEMY_CONN_ESCAPED}
 AIRFLOW__WEBSERVER__WEB_SERVER_PORT=8080
 AIRFLOW__WEBSERVER__RBAC=True
 AIRFLOW__WEBSERVER__EXPOSE_CONFIG=False
 AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL=60
 AIRFLOW__LOGGING__BASE_LOG_FOLDER=/opt/airflow/logs
+GCP_PROJECT=${GCP_PROJECT_ESCAPED}
+GCS_BUCKET=${GCS_BUCKET_ESCAPED}
+VERTEXAI_PROJECT=${VERTEXAI_PROJECT_ESCAPED}
+VERTEXAI_LOCATION=${VERTEXAI_LOCATION_ESCAPED}
+MONGODB_URI=${MONGODB_URI_ESCAPED}
+DATA_PORTAL_API_KEY=${DATA_PORTAL_API_KEY_ESCAPED}
+OPENAI_API_KEY=${OPENAI_API_KEY_ESCAPED}
+HUGGINGFACE_API_KEY=${HUGGINGFACE_API_KEY_ESCAPED}
 ENVEOF
 chown ${AIRFLOW_USER}:${AIRFLOW_USER} ${AIRFLOW_HOME}/airflow.env
 chmod 600 ${AIRFLOW_HOME}/airflow.env

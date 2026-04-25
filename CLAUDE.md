@@ -71,7 +71,7 @@ config/
 - Phase 3 (생성): 코드 완료, LLM 실호출 미검증 (mock 테스트만)
 - Phase 4~6 (평가/UI/배포): **미착수** — `src/evaluation/`, `src/ui/`는 `__init__.py` 스텁만 존재
 - QA 데이터셋: 100쌍 생성 완료 (`data/eval/qa_pairs.json`)
-- GCP 배포: Dockerfile 4종 + GitHub Actions 4종 작성 완료, Secrets 등록/실배포 미완료
+- GCP 배포: Dockerfile 4종 + GitHub Actions 4종 작성 완료, Cloud Run/API 및 Airflow 런타임은 Secret Manager 기반으로 전환 완료
 
 ## Commands
 
@@ -125,6 +125,8 @@ docker build -t rag-youth-policy-ui -f Dockerfile.ui .    # FE (Streamlit)
 - **설정**: `config/settings.py`의 `Settings` (pydantic-settings, `.env` 자동 로드). 임베딩 모델, 청크 크기, top_k 등 기본값 정의.
 
 ## Environment Variables (.env)
+
+로컬 개발은 `.env`, GCP 배포 런타임은 Secret Manager를 사용한다.
 
 ```
 # OPENAI_API_KEY=          # (deprecated — Vertex AI 경유 사용)

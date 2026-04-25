@@ -74,6 +74,27 @@ class TestDownloadJson:
         blob.download_as_text.assert_called_once_with(encoding="utf-8")
 
 
+class TestTextIO:
+    def test_upload_text_returns_uri(self, gcs, mock_storage):
+        blob = MagicMock()
+        mock_storage["bucket"].blob.return_value = blob
+
+        uri = gcs.upload_text("prompts/qa_generation_system.txt", "prompt")
+
+        assert uri == "gs://test-bucket/prompts/qa_generation_system.txt"
+        blob.upload_from_string.assert_called_once_with("prompt", content_type="text/plain")
+
+    def test_download_text_returns_content(self, gcs, mock_storage):
+        blob = MagicMock()
+        blob.download_as_text.return_value = "prompt"
+        mock_storage["bucket"].blob.return_value = blob
+
+        result = gcs.download_text("prompts/qa_generation_system.txt")
+
+        assert result == "prompt"
+        blob.download_as_text.assert_called_once_with(encoding="utf-8")
+
+
 class TestUploadFile:
     def test_upload_file_returns_uri(self, gcs, mock_storage, tmp_path):
         blob = MagicMock()
@@ -182,11 +203,11 @@ class TestBuildIndexFromGcs:
         upload_blob = MagicMock()
 
         list_blob = MagicMock()
-        list_blob.name = "policies/raw/data_portal_policies.json"
+        list_blob.name = "policies/raw/data_portal/latest.json"
         mock_client.list_blobs.return_value = [list_blob]
 
         def blob_router(path):
-            if path == "policies/raw/data_portal_policies.json":
+            if path == "policies/raw/data_portal/latest.json":
                 return download_blob
             return upload_blob
 

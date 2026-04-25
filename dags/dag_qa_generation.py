@@ -55,7 +55,7 @@ def _validate_path(raw: str, base: Path) -> Path:
             description="QA 생성에 사용할 LLM 모델 ID",
         ),
         "policies_path": Param(
-            default="policies/raw/data_portal_policies.json",
+            default="policies/normalized/all_policies.json",
             type="string",
             description="정책 원본 디렉토리 (data/ 기준 상대경로)",
         ),

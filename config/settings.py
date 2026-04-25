@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     mongodb_db: str = "rag_youth_policy"
     gcp_project: str = "rag-qna-eval"
     gcs_bucket: str = "rag-qna-eval-data"
+    qa_prompt_gcs_path: str = "prompts/qa_generation_system.txt"
     api_base_url: str = ""
 
     vertexai_project: str = "rag-qna-eval"

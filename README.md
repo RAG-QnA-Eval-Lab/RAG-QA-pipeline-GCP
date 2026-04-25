@@ -128,6 +128,7 @@ pip install -e ".[dev,ui,ko,crawl,viz]"
 ### 환경변수
 
 `.env.example`을 복사하여 `.env`를 생성하고 각 값을 채운다.
+이 파일은 로컬 개발용이다. GCP 배포 런타임은 Secret Manager를 사용한다.
 
 ```bash
 cp .env.example .env

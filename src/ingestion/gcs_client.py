@@ -49,6 +49,19 @@ class GCSClient:
         content = blob.download_as_text(encoding="utf-8")
         return json.loads(content)
 
+    def upload_text(self, gcs_path: str, content: str, content_type: str = "text/plain") -> str:
+        """텍스트를 GCS에 업로드. 반환: gs:// URI."""
+        blob = self.bucket.blob(gcs_path)
+        blob.upload_from_string(content, content_type=content_type)
+        uri = f"gs://{self._bucket_name}/{gcs_path}"
+        logger.info("GCS 텍스트 업로드: %s", uri)
+        return uri
+
+    def download_text(self, gcs_path: str) -> str:
+        """GCS 텍스트 파일 다운로드."""
+        blob = self.bucket.blob(gcs_path)
+        return blob.download_as_text(encoding="utf-8")
+
     def upload_file(self, local_path: Path, gcs_path: str) -> str:
         """로컬 파일 → GCS 업로드. 반환: gs:// URI."""
         blob = self.bucket.blob(gcs_path)

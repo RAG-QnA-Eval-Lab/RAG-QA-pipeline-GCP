@@ -170,6 +170,9 @@ def build_index_from_gcs(
 
     blobs = gcs.list_blobs(prefix=input_prefix)
     json_blobs = [b for b in blobs if b.endswith(".json")]
+    latest_blobs = [b for b in json_blobs if b.endswith("/latest.json")]
+    if latest_blobs:
+        json_blobs = latest_blobs
     if not json_blobs:
         logger.error("GCS에 정책 파일 없음: gs://%s/%s*.json", bucket, input_prefix)
         return {"index_built": False}

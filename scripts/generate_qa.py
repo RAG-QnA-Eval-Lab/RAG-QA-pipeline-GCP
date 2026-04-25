@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import math
@@ -29,55 +30,38 @@ import os  # noqa: E402
 os.environ.setdefault("VERTEXAI_PROJECT", os.getenv("VERTEXAI_PROJECT", "rag-qna-eval"))
 os.environ.setdefault("VERTEXAI_LOCATION", os.getenv("VERTEXAI_LOCATION", "asia-northeast3"))
 
+from config.settings import settings  # noqa: E402
 from src.generation.llm_client import generate  # noqa: E402
+from src.ingestion.gcs_client import GCSClient  # noqa: E402
+from src.ingestion.policy_store import load_policy_records  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 TARGET_CATEGORIES = frozenset({"housing", "employment", "education", "welfare"})
-
-QA_SYSTEM_PROMPT = """\
-당신은 한국 청년 정책 평가 데이터셋 생성 전문가입니다.
-
-주어진 정책 원문을 읽고, RAG 시스템 평가용 QA 쌍을 생성하세요.
-
-규칙:
-1. 질문(question)은 실제 청년이 할 법한 자연스러운 한국어로 작성
-2. 정답(ground_truth)은 반드시 제공된 정책 텍스트에 근거하여 작성 (환각 금지)
-3. ground_truth는 2~5문장으로, 정책 텍스트에서 직접 발췌하거나 요약한 내용이어야 함
-4. 각 QA 쌍에 난이도(difficulty)와 질문유형(qa_type)을 지정
-
-난이도 기준:
-- easy: 정책 텍스트에서 직접 찾을 수 있는 단순 사실 질문
-- medium: 정책 텍스트의 여러 부분을 종합해야 답할 수 있는 질문
-- hard: 조건 조합, 추론이 필요하거나 정책 내 항목 비교가 필요한 질문
-
-질문유형(qa_type):
-- factual: 자격 조건, 지원 금액, 신청 방법 등 사실 확인
-- reasoning: 여러 조건 조합이나 판단이 필요한 질문
-- comparison: 정책 내 항목 비교 (예: 지원금 vs 대출, 신규 vs 연장)
-
-응답 형식 (JSON 배열):
-[
-  {
-    "question": "...",
-    "ground_truth": "...",
-    "difficulty": "easy|medium|hard",
-    "qa_type": "factual|reasoning|comparison"
-  }
-]
-
-JSON만 출력하세요. 다른 텍스트는 포함하지 마세요."""
 
 VALID_DIFFICULTIES = frozenset({"easy", "medium", "hard"})
 VALID_QA_TYPES = frozenset({"factual", "reasoning", "comparison"})
 
 
 def load_policies(path: Path) -> list[dict]:
-    """정책 데이터 JSON 파일 로드."""
-    with open(path, encoding="utf-8") as f:
-        data = json.load(f)
+    """정책 데이터 파일 또는 디렉토리 로드."""
+    data = load_policy_records(path)
     logger.info("정책 %d건 로드: %s", len(data), path)
     return data
+
+
+def load_qa_prompt() -> tuple[str, dict[str, str]]:
+    """GCS에서 QA 생성 시스템 프롬프트를 로드한다."""
+    gcs = GCSClient(settings.gcs_bucket)
+    prompt = gcs.download_text(settings.qa_prompt_gcs_path).strip()
+    if not prompt:
+        raise RuntimeError(f"QA 프롬프트가 비어 있음: gs://{settings.gcs_bucket}/{settings.qa_prompt_gcs_path}")
+
+    metadata = {
+        "gcs_uri": f"gs://{settings.gcs_bucket}/{settings.qa_prompt_gcs_path}",
+        "sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
+    }
+    return prompt, metadata
 
 
 def score_policy_richness(policy: dict) -> int:
@@ -178,7 +162,7 @@ def plan_difficulty_assignments(
 
 
 def build_qa_prompt(
-    policy: dict, qa_count: int, difficulties: list[str],
+    policy: dict, qa_count: int, difficulties: list[str], system_prompt: str,
 ) -> list[dict[str, str]]:
     """GPT-4o-mini 프롬프트 빌드."""
     diff_desc = ", ".join(f"{d} 1개" for d in difficulties)
@@ -202,7 +186,7 @@ def build_qa_prompt(
     )
 
     return [
-        {"role": "system", "content": QA_SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_msg},
     ]
 
@@ -253,10 +237,11 @@ def generate_qa_for_policy(
     policy: dict,
     qa_count: int,
     difficulties: list[str],
+    system_prompt: str,
     model: str = "vertex_ai/gemini-2.5-flash",
 ) -> list[dict] | None:
     """단일 정책에서 QA 쌍 생성."""
-    messages = build_qa_prompt(policy, qa_count, difficulties)
+    messages = build_qa_prompt(policy, qa_count, difficulties, system_prompt)
 
     try:
         resp = generate(messages=messages, model=model, temperature=0.3, max_tokens=2048)
@@ -270,8 +255,9 @@ def generate_qa_for_policy(
         return None
 
     for pair in pairs:
-        pair["reference_doc"] = "data_portal_policies.json"
-        pair["reference_source"] = policy.get("source_name", "data_portal")
+        source_name = policy.get("source_name", "data_portal")
+        pair["reference_doc"] = policy.get("raw_path", f"{source_name}/latest.json")
+        pair["reference_source"] = source_name
         pair["category"] = policy.get("category", "")
         pair["policy_title"] = policy.get("title", "")
         pair["policy_id"] = policy.get("policy_id", "")
@@ -279,7 +265,7 @@ def generate_qa_for_policy(
     return pairs
 
 
-def assemble_output(all_pairs: list[dict], model: str) -> dict:
+def assemble_output(all_pairs: list[dict], model: str, prompt_metadata: dict[str, str]) -> dict:
     """최종 JSON 조립 — 순차 ID, 메타데이터 포함."""
     for i, pair in enumerate(all_pairs, 1):
         pair["id"] = f"q{i:03d}"
@@ -293,6 +279,7 @@ def assemble_output(all_pairs: list[dict], model: str) -> dict:
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "model": model,
         "domain": "youth_policy",
+        "prompt": prompt_metadata,
         "categories": categories,
         "total_count": len(all_pairs),
         "difficulty_distribution": diff_dist,
@@ -311,6 +298,7 @@ def generate_qa_dataset(
     dry_run: bool = False,
 ) -> dict:
     """QA 데이터셋 생성 메인 오케스트레이션."""
+    system_prompt, prompt_metadata = load_qa_prompt()
     policies = load_policies(policies_path)
     if not policies:
         logger.error("정책 데이터 없음")
@@ -326,6 +314,7 @@ def generate_qa_dataset(
     if dry_run:
         cat_counts = Counter(p["category"] for p in selected)
         logger.info("=== DRY RUN ===")
+        logger.info("프롬프트: %s (%s)", prompt_metadata["gcs_uri"], prompt_metadata["sha256"][:12])
         logger.info("선택 정책 %d건, 카테고리별: %s", len(selected), dict(cat_counts))
         for i, (p, diffs) in enumerate(zip(selected, assignments), 1):
             logger.info(
@@ -344,7 +333,7 @@ def generate_qa_dataset(
             "[%d/%d] %s (난이도: %s)",
             i, len(selected), policy["title"][:50], diffs,
         )
-        pairs = generate_qa_for_policy(policy, len(diffs), diffs, model)
+        pairs = generate_qa_for_policy(policy, len(diffs), diffs, system_prompt, model)
         if pairs:
             all_pairs.extend(pairs)
             logger.info("  → %d개 QA 쌍 생성", len(pairs))
@@ -359,7 +348,7 @@ def generate_qa_dataset(
         logger.error("QA 쌍 생성 실패 (0건)")
         sys.exit(1)
 
-    output = assemble_output(all_pairs, model)
+    output = assemble_output(all_pairs, model, prompt_metadata)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
@@ -377,7 +366,7 @@ def generate_qa_dataset(
 def main() -> None:
     parser = argparse.ArgumentParser(description="QA 평가 데이터셋 생성")
     parser.add_argument(
-        "--input", default="data/policies/raw/data_portal_policies.json",
+        "--input", default="data/policies/normalized/all_policies.json",
         help="정책 데이터 JSON 경로",
     )
     parser.add_argument(
