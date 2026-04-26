@@ -4,8 +4,9 @@ WORKDIR /app
 COPY pyproject.toml .
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --disable-pip-version-check ".[ui]" "plotly>=5.0"
-COPY src/ui/ src/ui/
+COPY .streamlit/ .streamlit/
 COPY src/__init__.py src/__init__.py
+COPY src/ui/ src/ui/
 ENV PORT=8080 \
     PYTHONPATH=/app
 EXPOSE 8080
