@@ -60,7 +60,7 @@ def collect_and_index():
         logger.info("수집 결과: %s", results)
         return results
 
-    @task()
+    @task(execution_timeout=timedelta(hours=2))
     def rebuild_index(collect_result: dict) -> dict:  # noqa: ARG001
         """GCS 원본 → 청킹 → 임베딩 → FAISS 인덱스 빌드 → GCS 업로드."""
         from src.ingestion.pipeline import build_index_from_gcs

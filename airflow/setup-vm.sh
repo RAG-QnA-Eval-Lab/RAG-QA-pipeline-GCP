@@ -96,7 +96,8 @@ apt-get update -y
 apt-get install -y \
   python3 python3-venv python3-dev \
   postgresql postgresql-client \
-  git curl build-essential libpq-dev
+  git curl build-essential libpq-dev \
+  mecab libmecab-dev mecab-ipadic-utf8
 
 echo "=== 2/7. PostgreSQL 설정 ==="
 sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='airflow'" | grep -q 1 || \

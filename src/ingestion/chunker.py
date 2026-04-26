@@ -67,11 +67,15 @@ def _chunk_single(doc: Document, chunk_size: int, chunk_overlap: int) -> list[Ch
 
 
 def _split_sentences(text: str) -> list[str]:
-    """한국어 문장 분리. kss 사용 가능 시 우선, 아니면 regex 폴백."""
+    """한국어 문장 분리. kss mecab → punct → regex 폴백 (pecab은 배치 처리에 너무 느림)."""
     try:
         import kss
 
-        return kss.split_sentences(text)
+        for backend in ("mecab", "punct"):
+            try:
+                return kss.split_sentences(text, backend=backend)
+            except Exception:
+                continue
     except ImportError:
         pass
 

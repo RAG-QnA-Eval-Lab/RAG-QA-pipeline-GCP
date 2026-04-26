@@ -11,7 +11,7 @@ Hybrid RAG 기반 학생/청년 정부 정책 QnA 시스템. 멀티 LLM (GPT-4o,
 ```
 GCP 인프라:
   Cloud Storage (GCS)       — 실제 데이터 저장소 (정책 원본 JSON/PDF + FAISS 인덱스)
-  Compute Engine VM #1      — MongoDB (메타데이터 전용, 34.50.21.132:27017) + Grafana (:3000)
+  Compute Engine VM #1      — MongoDB (메타데이터 전용, 34.47.80.98:27017, static IP) + Grafana (:3000)
   Compute Engine VM #2      — Airflow 2.9.3 (http://34.47.107.145:8080)
   Cloud Run #1 (BE, 2Gi)    — FastAPI + FAISS 인메모리 검색
   Cloud Run #2 (FE, 512Mi)  — Streamlit (httpx → BE API 호출)
@@ -168,7 +168,7 @@ docker build -t rag-youth-policy-ui -f Dockerfile.ui .    # FE
 
 ```
 DATA_PORTAL_API_KEY=         # 공공데이터포털 API
-MONGODB_URI=mongodb://34.50.21.132:27017
+MONGODB_URI=mongodb://34.47.80.98:27017
 MONGODB_DB=rag_youth_policy
 GCP_PROJECT=rag-qna-eval
 GCS_BUCKET=rag-qna-eval-data
