@@ -34,6 +34,7 @@ class HealthResponse(BaseModel):
     status: str
     faiss_loaded: bool
     faiss_doc_count: int
+    faiss_dim: int | None = None
     faiss_last_updated: str | None = None
     mongodb_connected: bool
     gcs_accessible: bool | None = None

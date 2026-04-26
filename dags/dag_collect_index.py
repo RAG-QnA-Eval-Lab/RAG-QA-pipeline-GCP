@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from datetime import timedelta
 from pathlib import Path
@@ -28,6 +29,7 @@ DEFAULT_ARGS = {
 REPO_ROOT = Path("/opt/rag-pipeline")
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+RAW_OUTPUT_DIR = REPO_ROOT / "data" / "policies" / "raw"
 
 
 @dag(
@@ -46,7 +48,12 @@ def collect_and_index():
         """모든 수집기 실행 → 로컬 + GCS + MongoDB 저장."""
         from scripts.collect_policies import run_all_collections
 
-        results = run_all_collections()
+        # Airflow task의 cwd는 배포/실행 방식에 따라 달라질 수 있다.
+        # 상대경로 "data/..."를 쓰면 /opt/rag-pipeline 밖에 쓰려다 PermissionError가 날 수 있어
+        # 항상 repo 내부 절대경로를 사용한다.
+        os.chdir(REPO_ROOT)
+        RAW_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        results = run_all_collections(output_dir=str(RAW_OUTPUT_DIR))
         if all(v == "failed" for v in results.values()):
             raise RuntimeError(f"전체 수집 실패: {results}")
 

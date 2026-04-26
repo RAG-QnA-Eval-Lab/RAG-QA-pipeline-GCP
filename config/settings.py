@@ -28,8 +28,10 @@ class Settings(BaseSettings):
     vertexai_location: str = "asia-northeast3"
     gcp_location: str = "asia-northeast3"
 
-    embedding_model: str = "vertex_ai/text-embedding-004"
-    embedding_dim: int = 768
+    # 현재 운영 FAISS 인덱스는 openai/text-embedding-3-small (1536차원)로 생성됨.
+    # 인덱스 재빌드 없이 이 값을 바꾸면 검색 시 FAISS 차원 불일치가 발생한다.
+    embedding_model: str = "openai/text-embedding-3-small"
+    embedding_dim: int = 1536
     index_gcs_prefix: str = "index"
     download_index_from_gcs: bool = True
     force_gcs_index_download: bool = False

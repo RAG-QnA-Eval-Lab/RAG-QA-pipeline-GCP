@@ -51,5 +51,5 @@ jobs:
             --min-instances 0 \
             --max-instances 1 \
             --service-account sa-rag-api@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
-            --set-env-vars "ENVIRONMENT=production,ENABLE_CLOUD_MONITORING=true,GCS_BUCKET=rag-qna-eval-data,INDEX_GCS_PREFIX=index,VERTEXAI_PROJECT=rag-qna-eval,VERTEXAI_LOCATION=asia-northeast3" \
+            --set-env-vars "ENVIRONMENT=production,ENABLE_CLOUD_MONITORING=true,GCS_BUCKET=rag-qna-eval-data,INDEX_GCS_PREFIX=index,EMBEDDING_MODEL=openai/text-embedding-3-small,EMBEDDING_DIM=1536,VERTEXAI_PROJECT=rag-qna-eval,VERTEXAI_LOCATION=asia-northeast3" \
             --update-secrets "MONGODB_URI=mongodb-uri:latest,OPENAI_API_KEY=openai-api-key:latest,HUGGINGFACE_API_KEY=huggingface-api-key:latest,API_KEY=api-key:latest"

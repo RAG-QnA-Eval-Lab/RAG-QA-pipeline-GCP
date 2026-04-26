@@ -146,6 +146,7 @@ def health() -> JSONResponse:
     pipeline = getattr(app.state, "rag_pipeline", None)
     faiss_loaded = pipeline is not None
     doc_count = pipeline.retrieval.index.ntotal if pipeline is not None else 0
+    faiss_dim = pipeline.retrieval.index.d if pipeline is not None else None
 
     mongo = getattr(app.state, "mongo", None)
     mongo_ok = False
@@ -185,6 +186,7 @@ def health() -> JSONResponse:
         status=status,
         faiss_loaded=faiss_loaded,
         faiss_doc_count=doc_count,
+        faiss_dim=faiss_dim,
         faiss_last_updated=get_index_last_updated(_INDEX_DIR),
         mongodb_connected=mongo_ok,
         gcs_accessible=gcs_ok,

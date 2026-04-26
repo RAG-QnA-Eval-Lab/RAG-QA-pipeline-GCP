@@ -78,6 +78,11 @@ class RetrievalPipeline:
             return search_bm25(query, self.bm25, self._bm25_docs, top_k=top_k)
 
         query_embedding = embed_texts([query])[0]
+        if len(query_embedding) != self.index.d:
+            raise ValueError(
+                f"임베딩 차원 불일치: query_dim={len(query_embedding)}, "
+                f"index_dim={self.index.d}, embedding_model={settings.embedding_model}"
+            )
 
         if strategy == SearchStrategy.VECTOR_ONLY:
             return vector_search(query_embedding, self.index, self.metadata, top_k=top_k)
