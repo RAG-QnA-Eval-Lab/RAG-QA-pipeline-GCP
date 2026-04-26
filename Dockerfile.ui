@@ -6,6 +6,9 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --disable-pip-version-check ".[ui]" "plotly>=5.0"
 COPY .streamlit/ .streamlit/
 COPY src/__init__.py src/__init__.py
+COPY src/ingestion/__init__.py src/ingestion/__init__.py
+COPY src/ingestion/collectors/__init__.py src/ingestion/collectors/__init__.py
+COPY src/ingestion/collectors/region.py src/ingestion/collectors/region.py
 COPY src/ui/ src/ui/
 ENV PORT=8080 \
     PYTHONPATH=/app
