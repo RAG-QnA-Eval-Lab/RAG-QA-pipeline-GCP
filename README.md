@@ -23,7 +23,7 @@ Hybrid RAG 기반 학생/청년 정부 정책 QnA 시스템. 멀티 LLM (GPT-4o,
 
 ## 아키텍처
 
-![RAG-QA Pipeline Architecture](docs/rag-qa-pipeline(1).drawio.png)
+![RAG-QA Pipeline Architecture](docs/rag-qa-architecture.jpg)
 
 > 📎 [draw.io 원본 파일](docs/rag-qa-pipeline.drawio) — 다이어그램 편집 가능
 
