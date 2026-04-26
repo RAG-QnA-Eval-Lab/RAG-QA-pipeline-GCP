@@ -40,12 +40,27 @@ class PolicyMetadataStore:
     def ingestion_logs(self) -> Collection:
         return self.db["ingestion_logs"]
 
+    @property
+    def gcs_assets(self) -> Collection:
+        return self.db["gcs_assets"]
+
+    @property
+    def qa_datasets(self) -> Collection:
+        return self.db["qa_datasets"]
+
     def ensure_indexes(self) -> None:
         self.policies.create_index("policy_id", unique=True)
         self.policies.create_index("category")
         self.policies.create_index("source_name")
         self.ingestion_logs.create_index("source")
         self.ingestion_logs.create_index("created_at")
+        self.gcs_assets.create_index("gcs_uri", unique=True)
+        self.gcs_assets.create_index("asset_type")
+        self.gcs_assets.create_index("object_name")
+        self.gcs_assets.create_index("synced_at")
+        self.qa_datasets.create_index("dataset_id", unique=True)
+        self.qa_datasets.create_index("generated_at")
+        self.qa_datasets.create_index("gcs_uri")
 
     def upsert_policy(self, metadata: dict) -> None:
         """정책 메타데이터 upsert (policy_id 기준)."""
@@ -86,6 +101,53 @@ class PolicyMetadataStore:
 
     def count(self, query: dict | None = None) -> int:
         return self.policies.count_documents(query or {})
+
+    def upsert_gcs_asset(self, asset: dict) -> None:
+        """GCS 객체 catalog 메타데이터 upsert (gcs_uri 기준)."""
+        gcs_uri = asset.get("gcs_uri")
+        if not gcs_uri:
+            logger.warning("gcs_uri 없는 GCS asset 무시: %s", asset.get("object_name", ""))
+            return
+        now = datetime.now(timezone.utc).isoformat()
+        self.gcs_assets.update_one(
+            {"gcs_uri": gcs_uri},
+            {"$set": {**asset, "synced_at": now}},
+            upsert=True,
+        )
+
+    def upsert_gcs_assets_batch(self, assets: list[dict]) -> int:
+        """GCS 객체 catalog 메타데이터 배치 upsert."""
+        now = datetime.now(timezone.utc).isoformat()
+        ops = [
+            UpdateOne(
+                {"gcs_uri": asset["gcs_uri"]},
+                {"$set": {**asset, "synced_at": now}},
+                upsert=True,
+            )
+            for asset in assets
+            if asset.get("gcs_uri")
+        ]
+        if not ops:
+            return 0
+        result = self.gcs_assets.bulk_write(ops, ordered=False)
+        return result.upserted_count + result.modified_count
+
+    def list_gcs_assets(self, query: dict | None = None, skip: int = 0, limit: int = 100) -> list[dict]:
+        cursor = self.gcs_assets.find(query or {}, {"_id": 0}).skip(skip).limit(limit)
+        return list(cursor)
+
+    def upsert_qa_dataset(self, metadata: dict) -> None:
+        """QA 데이터셋 버전/생성정보 메타데이터 upsert."""
+        dataset_id = metadata.get("dataset_id") or metadata.get("gcs_uri") or metadata.get("version")
+        if not dataset_id:
+            logger.warning("dataset_id 없는 QA dataset 메타데이터 무시")
+            return
+        now = datetime.now(timezone.utc).isoformat()
+        self.qa_datasets.update_one(
+            {"dataset_id": dataset_id},
+            {"$set": {**metadata, "dataset_id": dataset_id, "updated_at": now}},
+            upsert=True,
+        )
 
     def log_ingestion(
         self,

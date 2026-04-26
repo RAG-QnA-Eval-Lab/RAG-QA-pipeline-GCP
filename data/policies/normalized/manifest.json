@@ -1,0 +1,16 @@
+{
+  "total_policies": 2185,
+  "sources": {
+    "data_portal": 2185
+  },
+  "categories": {
+    "housing": 222,
+    "welfare": 521,
+    "employment": 900,
+    "participation": 299,
+    "education": 243
+  },
+  "scopes": {
+    "regional": 2185
+  }
+}

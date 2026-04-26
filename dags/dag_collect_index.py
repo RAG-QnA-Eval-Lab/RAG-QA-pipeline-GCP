@@ -7,7 +7,9 @@
 from __future__ import annotations
 
 import logging
+import sys
 from datetime import timedelta
+from pathlib import Path
 
 import pendulum
 from airflow.decorators import dag, task
@@ -22,6 +24,10 @@ DEFAULT_ARGS = {
     "retry_delay": timedelta(minutes=5),
     "on_failure_callback": on_failure_callback,
 }
+
+REPO_ROOT = Path("/opt/rag-pipeline")
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 
 @dag(

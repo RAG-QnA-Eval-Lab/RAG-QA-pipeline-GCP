@@ -6,7 +6,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import sys
 from datetime import timedelta
 from pathlib import Path
 
@@ -25,6 +27,9 @@ DEFAULT_ARGS = {
 }
 
 REPO_ROOT = Path("/opt/rag-pipeline")
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 ALLOWED_DATA_DIR = REPO_ROOT / "data"
 
 
@@ -57,12 +62,12 @@ def _validate_path(raw: str, base: Path) -> Path:
         "policies_path": Param(
             default="policies/normalized/all_policies.json",
             type="string",
-            description="정책 원본 디렉토리 (data/ 기준 상대경로)",
+            description="정책 원본 파일 (data/ 기준 상대경로, 예: policies/normalized/all_policies.json)",
         ),
         "output_path": Param(
             default="eval/qa_pairs.json",
             type="string",
-            description="QA 데이터셋 출력 경로 (data/ 기준 상대경로)",
+            description="QA 데이터셋 출력 경로 (data/ 기준 상대경로, 예: eval/qa_pairs.json)",
         ),
         "dry_run": Param(default=False, type="boolean", description="드라이런 (LLM 호출 없이 테스트)"),
     },
@@ -102,8 +107,54 @@ def qa_generation():
         logger.info("GCS 업로드 완료: %s", gcs_uri)
         return gcs_uri
 
+    @task()
+    def sync_qa_metadata(gcs_uri: str, **context) -> dict:  # noqa: ARG001
+        """QA 데이터셋 GCS 객체와 데이터셋 메타데이터를 MongoDB에 동기화."""
+        from config.settings import settings
+        from src.ingestion.gcs_catalog import sync_gcs_objects_to_mongo
+        from src.ingestion.mongo_client import PolicyMetadataStore
+
+        output_path = _validate_path(context["params"]["output_path"], ALLOWED_DATA_DIR)
+        with open(output_path, encoding="utf-8") as f:
+            data = json.load(f)
+
+        object_name = f"eval/{output_path.name}"
+        dataset_id = f"{data.get('domain', 'qa')}:{data.get('version', 'unknown')}:{data.get('generated_at', '')}"
+        store = PolicyMetadataStore()
+        try:
+            synced_assets = sync_gcs_objects_to_mongo(
+                [object_name],
+                bucket=settings.gcs_bucket,
+                mongo=store,
+                metadata_overrides={
+                    object_name: {
+                        "asset_type": "qa_dataset",
+                        "record_count": data.get("total_count"),
+                    }
+                },
+            )
+            store.upsert_qa_dataset({
+                "dataset_id": dataset_id,
+                "gcs_uri": gcs_uri,
+                "version": data.get("version"),
+                "generated_at": data.get("generated_at"),
+                "model": data.get("model"),
+                "domain": data.get("domain"),
+                "categories": data.get("categories"),
+                "total_count": data.get("total_count"),
+                "difficulty_distribution": data.get("difficulty_distribution"),
+                "qa_type_distribution": data.get("qa_type_distribution"),
+                "prompt": data.get("prompt"),
+            })
+        finally:
+            store.close()
+
+        logger.info("QA MongoDB 메타데이터 동기화 완료: %s", gcs_uri)
+        return {"gcs_assets_synced": synced_assets, "dataset_id": dataset_id}
+
     result = generate_qa()
-    upload_to_gcs(result)
+    uploaded = upload_to_gcs(result)
+    sync_qa_metadata(uploaded)
 
 
 qa_generation()

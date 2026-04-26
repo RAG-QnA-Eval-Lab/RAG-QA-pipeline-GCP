@@ -202,6 +202,29 @@ def build_index_from_gcs(
         result["gcs_metadata_path"] = f"gs://{bucket}/{output_prefix}metadata.pkl"
         logger.info("GCS 인덱스 업로드 완료: %s", result["gcs_index_path"])
 
+        try:
+            from src.ingestion.gcs_catalog import sync_gcs_objects_to_mongo
+
+            synced = sync_gcs_objects_to_mongo(
+                [f"{output_prefix}faiss.index", f"{output_prefix}metadata.pkl"],
+                bucket=bucket,
+                metadata_overrides={
+                    f"{output_prefix}faiss.index": {
+                        "asset_type": "index_artifact",
+                        "record_count": result["chunks"],
+                        "extra": {"documents": result["documents"], "chunks": result["chunks"]},
+                    },
+                    f"{output_prefix}metadata.pkl": {
+                        "asset_type": "index_artifact",
+                        "record_count": result["chunks"],
+                        "extra": {"documents": result["documents"], "chunks": result["chunks"]},
+                    },
+                },
+            )
+            logger.info("GCS index catalog 동기화 완료: %d건", synced)
+        except Exception:
+            logger.exception("GCS index catalog 동기화 실패 — 인덱스 업로드는 완료됨")
+
     return result
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -134,6 +134,37 @@ class TestListBlobs:
         assert result == ["policies/raw/a.json", "policies/raw/b.json"]
         mock_storage["client"].list_blobs.assert_called_once_with("test-bucket", prefix="policies/raw/")
 
+    def test_list_blob_metadata_returns_catalog_fields(self, gcs, mock_storage):
+        blob = MagicMock()
+        blob.name = "eval/qa_pairs.json"
+        blob.size = 123
+        blob.md5_hash = "md5"
+        blob.crc32c = "crc"
+        blob.etag = "etag"
+        blob.generation = 7
+        blob.content_type = "application/json"
+        blob.updated = datetime(2026, 4, 26, tzinfo=timezone.utc)
+        blob.time_created = datetime(2026, 4, 25, tzinfo=timezone.utc)
+        mock_storage["client"].list_blobs.return_value = [blob]
+
+        result = gcs.list_blob_metadata("eval/")
+
+        assert result == [
+            {
+                "bucket": "test-bucket",
+                "object_name": "eval/qa_pairs.json",
+                "gcs_uri": "gs://test-bucket/eval/qa_pairs.json",
+                "size": 123,
+                "md5_hash": "md5",
+                "crc32c": "crc",
+                "etag": "etag",
+                "generation": 7,
+                "content_type": "application/json",
+                "updated": "2026-04-26T00:00:00+00:00",
+                "time_created": "2026-04-25T00:00:00+00:00",
+            }
+        ]
+
 
 class TestExists:
     def test_exists_true(self, gcs, mock_storage):
@@ -173,8 +204,9 @@ class TestBuildIndexFromGcs:
     """pipeline.build_index_from_gcs 통합 테스트 (GCS + 임베딩 mock)."""
 
     @patch("src.ingestion.pipeline.embed_texts")
+    @patch("src.ingestion.gcs_catalog.sync_gcs_objects_to_mongo")
     @patch("src.ingestion.gcs_client.storage")
-    def test_build_index_from_gcs(self, mock_storage_mod, mock_embed):
+    def test_build_index_from_gcs(self, mock_storage_mod, mock_sync_catalog, mock_embed):
         import numpy as np
 
         from src.ingestion.pipeline import build_index_from_gcs
@@ -222,3 +254,4 @@ class TestBuildIndexFromGcs:
         assert result["documents"] == 1
         assert "gcs_index_path" in result
         assert upload_blob.upload_from_filename.call_count == 2
+        mock_sync_catalog.assert_called_once()

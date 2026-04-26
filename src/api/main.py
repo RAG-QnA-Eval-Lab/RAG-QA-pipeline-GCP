@@ -69,6 +69,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         mongo = PolicyMetadataStore()
         mongo.client.admin.command("ping")
+        mongo.ensure_indexes()
         app.state.mongo = mongo
         logger.info("MongoDB connected: %s", _redact_mongo_target(settings.mongodb_uri))
     except Exception:

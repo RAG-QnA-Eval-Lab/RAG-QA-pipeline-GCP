@@ -8,8 +8,8 @@ class ModelConfig(TypedDict):
 
 
 MODELS: dict[str, ModelConfig] = {
-    "gpt-4o-mini": {"id": "vertex_ai/openai/gpt-4o-mini", "temperature": 0.0, "max_tokens": 2048},
-    "gpt-4o": {"id": "vertex_ai/openai/gpt-4o", "temperature": 0.0, "max_tokens": 2048},
+    "gpt-4o-mini": {"id": "openai/gpt-4o-mini", "temperature": 0.0, "max_tokens": 2048},
+    "gpt-4o": {"id": "openai/gpt-4o", "temperature": 0.0, "max_tokens": 2048},
     "claude-sonnet": {"id": "vertex_ai/claude-sonnet-4-5", "temperature": 0.0, "max_tokens": 2048},
     "gemini-flash": {"id": "vertex_ai/gemini-2.5-flash", "temperature": 0.0, "max_tokens": 2048},
     "gemini-pro": {"id": "vertex_ai/gemini-2.5-pro", "temperature": 0.0, "max_tokens": 2048},

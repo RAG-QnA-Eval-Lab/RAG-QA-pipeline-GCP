@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 from datetime import datetime, timezone
@@ -40,6 +41,19 @@ def _raw_storage_paths(output_dir: str | Path, source: str) -> tuple[Path, Path]
     latest_path = root / "latest.json"
     snapshot_path = root / "snapshots" / f"{_timestamp()}.json"
     return latest_path, snapshot_path
+
+
+def _json_record_count(path: str | Path) -> int | None:
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return None
+    if isinstance(data, list):
+        return len(data)
+    if isinstance(data, dict) and isinstance(data.get("policies"), list):
+        return len(data["policies"])
+    return None
 
 
 def run_collection(
@@ -79,6 +93,8 @@ def run_collection(
 
     # 2. GCS 업로드
     gcs_uri = None
+    uploaded_gcs_objects: list[str] = []
+    gcs_asset_overrides: dict[str, dict] = {}
     if not skip_gcs:
         try:
             from src.ingestion.gcs_client import GCSClient
@@ -88,6 +104,17 @@ def run_collection(
             gcs_snapshot_path = f"policies/raw/{source}/snapshots/{snapshot_path.name}"
             gcs_uri = gcs.upload_json(gcs_latest_path, policy_dicts)
             gcs.upload_json(gcs_snapshot_path, policy_dicts)
+            uploaded_gcs_objects.extend([gcs_latest_path, gcs_snapshot_path])
+            gcs_asset_overrides[gcs_latest_path] = {
+                "asset_type": "raw_policy",
+                "related_source": source,
+                "record_count": len(policy_dicts),
+            }
+            gcs_asset_overrides[gcs_snapshot_path] = {
+                "asset_type": "raw_policy",
+                "related_source": source,
+                "record_count": len(policy_dicts),
+            }
             logger.info("GCS 업로드 완료: %s", gcs_uri)
 
             normalized_paths = [
@@ -105,6 +132,12 @@ def run_collection(
 
             for remote_path, local_file in normalized_paths:
                 gcs.upload_file(Path(local_file), remote_path)
+                uploaded_gcs_objects.append(remote_path)
+                gcs_asset_overrides[remote_path] = {
+                    "asset_type": "processed_policy",
+                    "related_source": source if "/by_source/" in remote_path else None,
+                    "record_count": _json_record_count(local_file),
+                }
         except Exception:
             logger.exception("GCS 업로드 실패 — 로컬 파일은 저장됨")
 
@@ -138,6 +171,17 @@ def run_collection(
                 valid_count=len(valid_policies),
                 gcs_paths=[gcs_uri] if gcs_uri else [],
             )
+
+            if uploaded_gcs_objects:
+                from src.ingestion.gcs_catalog import sync_gcs_objects_to_mongo
+
+                synced = sync_gcs_objects_to_mongo(
+                    uploaded_gcs_objects,
+                    bucket=settings.gcs_bucket,
+                    mongo=mongo,
+                    metadata_overrides=gcs_asset_overrides,
+                )
+                logger.info("GCS asset catalog 동기화 완료: %d건", synced)
             mongo.close()
         except Exception:
             logger.exception("MongoDB 연동 실패 — 로컬 파일은 저장됨")

@@ -166,6 +166,41 @@ class TestMongoClient:
         mock_collection.bulk_write.assert_called_once()
         assert count == 3
 
+    def test_upsert_gcs_assets_batch_bulk_write(self) -> None:
+        from src.ingestion.mongo_client import PolicyMetadataStore
+
+        store = PolicyMetadataStore()
+        mock_collection = MagicMock()
+        mock_result = MagicMock()
+        mock_result.upserted_count = 1
+        mock_result.modified_count = 1
+        mock_collection.bulk_write.return_value = mock_result
+        store._client = MagicMock()
+
+        with patch.object(type(store), "gcs_assets", new_callable=lambda: property(lambda self: mock_collection)):
+            count = store.upsert_gcs_assets_batch([
+                {"gcs_uri": "gs://bucket/eval/qa_pairs.json", "asset_type": "qa_dataset"},
+                {"gcs_uri": "gs://bucket/index/faiss.index", "asset_type": "index_artifact"},
+            ])
+
+        mock_collection.bulk_write.assert_called_once()
+        assert count == 2
+
+    def test_upsert_qa_dataset(self) -> None:
+        from src.ingestion.mongo_client import PolicyMetadataStore
+
+        store = PolicyMetadataStore()
+        mock_collection = MagicMock()
+        store._client = MagicMock()
+
+        with patch.object(type(store), "qa_datasets", new_callable=lambda: property(lambda self: mock_collection)):
+            store.upsert_qa_dataset({"dataset_id": "youth_policy:1.0:test", "total_count": 100})
+
+        mock_collection.update_one.assert_called_once()
+        call_args = mock_collection.update_one.call_args
+        assert call_args[0][0] == {"dataset_id": "youth_policy:1.0:test"}
+        assert call_args[1]["upsert"] is True
+
     def test_find_by_id(self) -> None:
         from src.ingestion.mongo_client import PolicyMetadataStore
 

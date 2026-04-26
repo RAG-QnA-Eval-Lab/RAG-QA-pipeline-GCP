@@ -14,6 +14,15 @@ from config.settings import settings
 logger = logging.getLogger(__name__)
 
 
+def _to_iso(value: object) -> str | None:
+    if value is None:
+        return None
+    isoformat = getattr(value, "isoformat", None)
+    if callable(isoformat):
+        return isoformat()
+    return str(value)
+
+
 class GCSClient:
     """GCS 버킷 래퍼 — JSON/바이너리 업로드·다운로드."""
 
@@ -83,6 +92,19 @@ class GCSClient:
         blobs = self.client.list_blobs(self._bucket_name, prefix=prefix)
         return [blob.name for blob in blobs]
 
+    def list_blob_metadata(self, prefix: str) -> list[dict]:
+        """prefix로 GCS 객체 메타데이터 목록 조회."""
+        blobs = self.client.list_blobs(self._bucket_name, prefix=prefix)
+        return [self._blob_metadata(blob) for blob in blobs]
+
+    def get_blob_metadata(self, gcs_path: str) -> dict | None:
+        """단일 GCS 객체 메타데이터 조회. 없으면 None."""
+        blob = self.bucket.blob(gcs_path)
+        if not blob.exists():
+            return None
+        blob.reload()
+        return self._blob_metadata(blob)
+
     def exists(self, gcs_path: str) -> bool:
         """GCS 파일 존재 여부."""
         blob = self.bucket.blob(gcs_path)
@@ -96,3 +118,18 @@ class GCSClient:
             return True
         except NotFound:
             return False
+
+    def _blob_metadata(self, blob: storage.Blob) -> dict:
+        return {
+            "bucket": self._bucket_name,
+            "object_name": blob.name,
+            "gcs_uri": f"gs://{self._bucket_name}/{blob.name}",
+            "size": blob.size,
+            "md5_hash": blob.md5_hash,
+            "crc32c": blob.crc32c,
+            "etag": blob.etag,
+            "generation": blob.generation,
+            "content_type": blob.content_type,
+            "updated": _to_iso(blob.updated),
+            "time_created": _to_iso(blob.time_created),
+        }
