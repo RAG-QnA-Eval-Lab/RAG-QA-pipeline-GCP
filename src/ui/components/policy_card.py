@@ -7,24 +7,8 @@ from typing import Any
 
 import streamlit as st
 
+from src.ingestion.collectors.region import format_region
 from src.ui.utils.style import CATEGORY_BG_COLORS, CATEGORY_COLORS, CATEGORY_LABELS
-
-_REGION_CODE_MAP: dict[str, str] = {
-    "11": "서울", "26": "부산", "27": "대구", "28": "인천", "29": "광주",
-    "30": "대전", "31": "울산", "36": "세종", "41": "경기", "42": "강원",
-    "43": "충북", "44": "충남", "45": "전북", "46": "전남", "47": "경북",
-    "48": "경남", "50": "제주", "51": "강원", "52": "전북",
-}
-
-
-def _format_region(raw: str) -> str:
-    if not raw or raw == "전국":
-        return "전국"
-    codes = [c.strip()[:2] for c in raw.split(",") if c.strip()]
-    names = sorted({_REGION_CODE_MAP.get(c, "") for c in codes} - {""})
-    if not names or len(names) >= 15:
-        return "전국"
-    return ", ".join(names)
 
 
 def _category_tag_html(category: str) -> str:
@@ -66,7 +50,7 @@ def render_policy_detail(policy: dict[str, Any]) -> None:
         ("신청 방법", policy.get("how_to_apply")),
         ("신청 기간", policy.get("application_period")),
         ("담당 부서", policy.get("managing_department")),
-        ("지역", _format_region(policy.get("region", ""))),
+        ("지역", format_region(policy.get("region", ""))),
         ("최종 업데이트", policy.get("last_updated")),
     ]
     has_detail = False

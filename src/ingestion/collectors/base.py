@@ -105,6 +105,9 @@ def parse_age(value: str | int) -> int:
 
 def build_raw_content(policy: Policy) -> str:
     """청킹용 전체 텍스트 생성."""
+    from src.ingestion.collectors.region import format_region
+
+    region_display = format_region(policy.region) if policy.region else ""
     parts = [
         f"정책명: {policy.title}",
         f"요약: {policy.summary}" if policy.summary else "",
@@ -114,7 +117,7 @@ def build_raw_content(policy: Policy) -> str:
         f"신청방법: {policy.how_to_apply}" if policy.how_to_apply else "",
         f"신청기간: {policy.application_period}" if policy.application_period else "",
         f"주관부처: {policy.managing_department}" if policy.managing_department else "",
-        f"지역: {policy.region}" if policy.region else "",
+        f"지역: {region_display}" if region_display else "",
     ]
     return "\n".join(p for p in parts if p)
 

@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import re
+
+from src.ingestion.collectors.region import REGION_CODE_MAP
 from src.retrieval import SearchResult
+
+_REGION_LINE_RE = re.compile(r"^(지역:\s*)(.+)$", re.MULTILINE)
 
 SYSTEM_PROMPT = (
     "당신은 대한민국 청년 정책 전문 상담사입니다.\n\n"
@@ -23,6 +28,26 @@ NO_RAG_SYSTEM_PROMPT = (
 )
 
 
+def _replace_region_codes(text: str) -> str:
+    """청크 텍스트 내 '지역: 11,26' 형태의 숫자 코드를 한국어 이름으로 변환."""
+    def _convert(match: re.Match[str]) -> str:
+        prefix = match.group(1)
+        raw = match.group(2).strip()
+        if not raw:
+            return match.group(0)
+        if raw == "전국":
+            return f"{prefix}전국"
+        codes = [c.strip()[:2] for c in raw.split(",") if c.strip()]
+        if not all(c in REGION_CODE_MAP for c in codes):
+            return match.group(0)
+        names = sorted({REGION_CODE_MAP[c] for c in codes})
+        if len(names) >= 15:
+            return f"{prefix}전국"
+        return f"{prefix}{', '.join(names)}"
+
+    return _REGION_LINE_RE.sub(_convert, text)
+
+
 def _format_context(results: list[SearchResult]) -> str:
     """검색 결과를 프롬프트용 컨텍스트 텍스트로 변환."""
     if not results:
@@ -40,7 +65,8 @@ def _format_context(results: list[SearchResult]) -> str:
         if category:
             header += f" [{category}]"
 
-        parts.append(f"{header}\n{r.content}")
+        content = _replace_region_codes(r.content)
+        parts.append(f"{header}\n{content}")
 
     return "\n\n".join(parts)
 
