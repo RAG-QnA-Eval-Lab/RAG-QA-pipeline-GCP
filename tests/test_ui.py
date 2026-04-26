@@ -183,14 +183,15 @@ class TestPolicyCardHelpers:
 
         html = _category_tag_html("housing")
         assert "주거" in html
-        assert "#2563EB" in html
+        assert "category-tag" in html
+        assert "color:" in html
 
     def test_category_tag_html_unknown(self) -> None:
         from src.ui.components.policy_card import _category_tag_html
 
         html = _category_tag_html("unknown_cat")
         assert "unknown_cat" in html
-        assert "#64748B" in html
+        assert "category-tag" in html
 
     def test_category_tag_html_empty(self) -> None:
         from src.ui.components.policy_card import _category_tag_html

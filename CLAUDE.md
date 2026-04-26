@@ -44,7 +44,21 @@ src/
 │   ├── safety_metrics.py   # evaluate_safety() — DeepEval HallucinationMetric
 │   ├── evaluator.py        # RAGEvaluator — 3단계 통합 오케스트레이터
 │   └── report.py           # generate_report() — JSON + HTML 리포트
-└── ui/                 # Streamlit 프론트엔드 (미구현, 스텁만 존재)
+└── ui/                 # Streamlit 프론트엔드 (httpx → BE API 호출)
+    ├── app.py              # 메인 엔트리포인트: st.navigation() 멀티페이지, 사이드바 /health 상태
+    ├── pages/
+    │   ├── chatbot.py      # QnA 챗봇 — RAG/No-RAG 비교, 출처 인용, 모델·전략 선택
+    │   ├── policy_explore.py   # 정책 탐색 — 카테고리 탭, 카드 그리드, 상세 14필드
+    │   ├── recommend.py    # 맞춤 추천 — 사용자 조건 입력 → generate API 호출
+    │   └── dashboard.py    # 평가 대시보드 — RAGAS/Judge/Safety 메트릭 Plotly 차트
+    ├── components/
+    │   ├── policy_card.py      # 정책 카드·상세 렌더링. 지역 코드→지역명 변환, XSS 방지
+    │   ├── chat_message.py     # 챗봇 답변 + 출처 expander + 토큰/레이턴시
+    │   └── metrics_display.py  # Plotly gauge + st.metric 시각화
+    └── utils/
+        ├── api_client.py   # APIClient (httpx) — BE 7개 엔드포인트 래핑, @st.cache_resource 싱글톤
+        ├── session_state.py    # init_state() — 채팅 히스토리·모델·전략 세션 상태
+        └── style.py        # 커스텀 CSS (카드 그리드, 카테고리 태그, 반응형)
 
 config/
 ├── settings.py         # pydantic-settings Settings 클래스 (.env 자동 로드). 싱글톤: settings
@@ -88,13 +102,13 @@ dags/                   # Airflow DAGs (VM #2에 배포)
 - Phase 0 (준비): 완료
 - Phase 1 (수집+인덱싱): 완료. 정책 2,235건 수집, FAISS 인덱스 빌드
 - Phase 2 (검색): 완료. 4가지 전략 + 코드리뷰 + 버그 수정
-- Phase 3 (생성): 완료. LiteLLM + Vertex AI 통합
+- Phase 3 (생성): 완료. LiteLLM + Vertex AI 통합. `LLMError` 커스텀 예외 도입 (status_code 기반 HTTP 매핑)
 - Phase 4 (평가): 완료. RAGAS v0.4 + LLM Judge + DeepEval 3단계 구현
-- FastAPI API: 완료. 6개 엔드포인트 + 미들웨어 + 에러 핸들링
-- Phase 5 (UI): **미착수** — `src/ui/`는 스텁만 존재. 구현 계획은 `.claude/plans/` 참조
+- FastAPI API: 완료. 6개 엔드포인트 + 미들웨어 + 에러 핸들링. `LLMError` 타입 기반 에러 핸들링
+- Phase 5 (UI): 완료. Streamlit 4페이지 (챗봇, 정책 탐색, 맞춤 추천, 평가 대시보드). 정책 상세 14개 필드 표시, 지역 코드→지역명 변환, XSS 방지
 - Phase 6 (배포+실험): Dockerfile 4종 + GitHub Actions 4종 작성 완료
 - QA 데이터셋: 100쌍 생성 완료 (`data/eval/qa_pairs.json`)
-- 테스트: 210 passed (API 26 + 평가 + 수집/검색/생성)
+- 테스트: 233 passed (API 26 + UI + 평가 + 수집/검색/생성)
 
 ## Commands
 
@@ -102,7 +116,7 @@ dags/                   # Airflow DAGs (VM #2에 배포)
 # Setup
 pip install -e ".[dev,api,ingestion,indexer,ko,eval,monitoring,crawl,ui,viz]"
 
-# Tests (210 tests)
+# Tests (233 tests)
 pytest                              # 전체
 pytest tests/test_api.py            # 단일 모듈
 pytest -k "test_chunk_size"         # 패턴 매칭
@@ -119,8 +133,9 @@ python -m src.ingestion.pipeline --gcs --bucket rag-qna-eval-data              #
 python -m src.retrieval.pipeline --query "질문" --strategy hybrid_rerank       # 검색 테스트
 python -m src.generation.pipeline --query "질문" --model gemini-flash --strategy hybrid_rerank
 
-# BE (로컬)
-uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+# BE (로컬 — macOS FAISS OpenMP 충돌 방지 포함)
+./run_api.sh                # KMP_DUPLICATE_LIB_OK 등 OpenMP 환경변수 설정 후 uvicorn 실행
+uvicorn src.api.main:app --host 0.0.0.0 --port 8000  # 직접 실행 (OpenMP 충돌 발생 가능)
 
 # FE (로컬 — BE 서버 실행 필요)
 streamlit run src/ui/app.py
@@ -143,6 +158,9 @@ docker build -t rag-youth-policy-ui -f Dockerfile.ui .    # FE
 - **CI/CD**: GitHub Actions 4종 — `ci.yml` (PR lint+test), `deploy-api.yml` (BE), `deploy-ui.yml` (FE), `deploy-jobs.yml` (수집/인덱싱 Job).
 - **FastAPI lifespan**: `app.state.rag_pipeline` (RAGPipeline), `app.state.mongo` (PolicyMetadataStore). 라우트에서 `deps.py`의 `get_rag_pipeline()`, `get_mongo()`로 접근.
 - **Airflow DAG 경로**: `_validate_path()`로 `ALLOWED_DATA_DIR = /opt/rag-pipeline/data` 내부로 제한. params의 경로는 `data/` 기준 상대경로.
+- **LLMError 예외 체계**: `LLMError(RuntimeError)` 커스텀 예외에 `status_code` 속성. LiteLLM 예외를 HTTP 코드로 매핑 (NotFound→404, Auth→401, BadRequest→400, RateLimit/Connection→502+재시도). generate 라우트에서 `HTTPException(status_code=exc.status_code)`로 전파.
+- **Vertex AI 리전 오버라이드**: `_VERTEX_LOCATION_OVERRIDES` dict (`llm_client.py`). 모델별 리전 지정 — Gemini 2.5 Pro는 `us-central1`, Claude Sonnet 4.5는 `us-east5` (Model Garden 가용 리전).
+- **UI XSS 방지**: `policy_card.py`에서 `html.escape()`로 사용자 노출 데이터 이스케이프, 출처 URL은 `https://`/`http://` 스킴만 허용.
 
 ## Environment Variables (.env)
 

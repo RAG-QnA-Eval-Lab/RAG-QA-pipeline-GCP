@@ -14,35 +14,53 @@ def render_eval_summary(result: dict[str, Any]) -> None:
     safety = result.get("safety")
 
     if ragas:
-        st.markdown("**RAGAS**")
+        st.markdown('<div class="section-label">RAGAS 정량 평가</div>', unsafe_allow_html=True)
         cols = st.columns(4)
-        _metric(cols[0], "Faithfulness", ragas.get("faithfulness"))
-        _metric(cols[1], "Answer Relevancy", ragas.get("answer_relevancy"))
-        _metric(cols[2], "Context Precision", ragas.get("context_precision"))
-        _metric(cols[3], "Context Recall", ragas.get("context_recall"))
+        _metric_card(cols[0], "Faithfulness", ragas.get("faithfulness"))
+        _metric_card(cols[1], "Answer Relevancy", ragas.get("answer_relevancy"))
+        _metric_card(cols[2], "Context Precision", ragas.get("context_precision"))
+        _metric_card(cols[3], "Context Recall", ragas.get("context_recall"))
 
     if judge:
-        st.markdown("**LLM Judge**")
+        st.markdown('<div class="section-label">LLM Judge 정성 평가</div>', unsafe_allow_html=True)
         cols = st.columns(4)
-        _metric(cols[0], "인용 정확도", judge.get("citation_accuracy"))
-        _metric(cols[1], "완전성", judge.get("completeness"))
-        _metric(cols[2], "가독성", judge.get("readability"))
-        _metric(cols[3], "평균", judge.get("average"))
+        _metric_card(cols[0], "인용 정확도", judge.get("citation_accuracy"), max_val=5.0)
+        _metric_card(cols[1], "완전성", judge.get("completeness"), max_val=5.0)
+        _metric_card(cols[2], "가독성", judge.get("readability"), max_val=5.0)
+        _metric_card(cols[3], "평균", judge.get("average"), max_val=5.0)
 
     if safety:
-        st.markdown("**Safety**")
+        st.markdown('<div class="section-label">Safety 안전성 평가</div>', unsafe_allow_html=True)
         cols = st.columns(2)
-        _metric(cols[0], "환각 점수", safety.get("hallucination_score"))
+        _metric_card(cols[0], "환각 점수", safety.get("hallucination_score"))
 
     if result.get("error"):
         st.error(f"평가 오류: {result['error']}")
 
 
-def _metric(col: st.delta_generator.DeltaGenerator, label: str, value: float | None) -> None:
+def _metric_card(
+    col: st.delta_generator.DeltaGenerator,
+    label: str,
+    value: float | None,
+    max_val: float = 1.0,
+) -> None:
     if value is not None:
-        col.metric(label, f"{value:.2f}")
+        display = f"{value:.2f}" if max_val <= 1.0 else f"{value:.1f}"
+        col.markdown(
+            f"""<div class="metric-card">
+                <div class="metric-value">{display}</div>
+                <div class="metric-label">{label}</div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
     else:
-        col.metric(label, "N/A")
+        col.markdown(
+            f"""<div class="metric-card">
+                <div class="metric-value" style="-webkit-text-fill-color:#A8A29E;color:#A8A29E">N/A</div>
+                <div class="metric-label">{label}</div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
 
 
 def render_metrics_table(results: list[dict[str, Any]]) -> None:

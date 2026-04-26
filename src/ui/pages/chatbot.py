@@ -16,10 +16,10 @@ from src.ui.utils.session_state import (
 )
 
 EXAMPLE_QUESTIONS = [
-    "청년 월세 지원 정책에 대해 알려주세요",
-    "취업 준비생을 위한 정부 지원은?",
-    "대학생이 받을 수 있는 장학금 정책은?",
-    "청년 전세자금 대출 조건이 어떻게 되나요?",
+    ("청년 월세 지원 정책에 대해 알려주세요", "주거"),
+    ("취업 준비생을 위한 정부 지원은?", "취업"),
+    ("대학생이 받을 수 있는 장학금 정책은?", "교육"),
+    ("청년 전세자금 대출 조건이 어떻게 되나요?", "금융"),
 ]
 
 STRATEGY_OPTIONS = {
@@ -34,7 +34,7 @@ STRATEGY_OPTIONS = {
 client = get_api_client()
 
 with st.sidebar:
-    st.header("모델 설정")
+    st.markdown("### 모델 설정")
 
     models_data = client.get_models()
     model_keys: list[str] = []
@@ -62,6 +62,8 @@ with st.sidebar:
     else:
         st.warning("모델 목록을 불러올 수 없습니다")
 
+    st.markdown("### 검색 설정")
+
     strategy_keys = list(STRATEGY_OPTIONS.keys())
     current_strategy = st.session_state[KEY_STRATEGY]
     strategy_idx = strategy_keys.index(current_strategy) if current_strategy in strategy_keys else 0
@@ -76,7 +78,7 @@ with st.sidebar:
     st.session_state[KEY_TEMPERATURE] = st.slider(
         "Temperature", 0.0, 2.0, st.session_state[KEY_TEMPERATURE], step=0.1
     )
-    st.session_state[KEY_NO_RAG] = st.toggle("RAG 없이 답변 (No RAG)", value=st.session_state[KEY_NO_RAG])
+    st.session_state[KEY_NO_RAG] = st.toggle("RAG 없이 답변", value=st.session_state[KEY_NO_RAG])
 
     if st.button("대화 초기화", use_container_width=True):
         st.session_state[KEY_MESSAGES] = []
@@ -84,23 +86,28 @@ with st.sidebar:
 
 # ── 메인 영역 ───────────────────────────────────────
 
-title_col, btn_col = st.columns([5, 1])
-title_col.title("💬 청년 정책 QnA")
-
 messages: list[dict] = st.session_state[KEY_MESSAGES]
 
-if messages:
-    if btn_col.button("🗑️ 새 대화", use_container_width=True):
-        st.session_state[KEY_MESSAGES] = []
-        st.rerun()
-
 if not messages:
-    st.markdown("궁금한 청년 정책에 대해 질문해보세요.")
-    cols = st.columns(2)
-    for i, q in enumerate(EXAMPLE_QUESTIONS):
-        if cols[i % 2].button(q, key=f"example_{i}", use_container_width=True):
+    st.markdown(
+        """<div class="page-header">
+            <h1>청년 정책 QnA</h1>
+            <p>궁금한 청년 정책에 대해 질문해보세요. AI가 관련 정책을 검색하고 답변합니다.</p>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+
+    cols = st.columns(2, gap="medium")
+    for i, (q, tag) in enumerate(EXAMPLE_QUESTIONS):
+        if cols[i % 2].button(f"{tag}  |  {q}", key=f"example_{i}", use_container_width=True):
             messages.append({"role": "user", "content": q})
             st.rerun()
+else:
+    col1, col2 = st.columns([6, 1])
+    col1.markdown("#### 정책 QnA")
+    if col2.button("새 대화", use_container_width=True):
+        st.session_state[KEY_MESSAGES] = []
+        st.rerun()
 
 for msg in messages:
     with st.chat_message(msg["role"]):

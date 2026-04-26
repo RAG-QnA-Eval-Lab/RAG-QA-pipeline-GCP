@@ -34,13 +34,13 @@ Phase 0                     P1         P2       P3       P4        P5         P6
 - Phase 0: 완료 (예산 알림 ₩200,000 잔여). Airflow VM 세팅 완료 (e2-standard-2, Airflow 2.9.3 + PostgreSQL 16 + 3 DAGs 배포)
 - Phase 1: 코드 구현 완료. 정책 2,235건 수집 (data_portal 2,185 + youthgo 50). FAISS 인덱스 빌드 완료 (16.5MB + metadata 3MB). GCS raw/processed 구조 및 prompt 저장 경로 정리 완료
 - Phase 2: 코드 구현 + 코드리뷰 + 버그 수정 완료
-- Phase 3: 코드 구현 완료. Vertex AI Model Garden + HuggingFace 전환 완료. Claude Sonnet은 Vertex AI 할당량 문제로 Anthropic 직접 API (`anthropic/claude-sonnet-4-5-20250929`)로 전환. Gemini 2.5 Pro는 `us-central1` 리전 오버라이드 적용. GPT-4o/4o-mini, Gemini Flash 실호출 검증 완료
+- Phase 3: 코드 구현 완료. Vertex AI Model Garden + HuggingFace 전환 완료. Claude Sonnet은 Vertex AI Model Garden (`vertex_ai/claude-sonnet-4-5`, us-east5)으로 전환. Gemini 2.5 Pro는 `us-central1` 리전 오버라이드 적용. GPT-4o/4o-mini, Gemini Flash 실호출 검증 완료. `LLMError(RuntimeError)` 커스텀 예외 도입 — status_code 기반 HTTP 매핑, LiteLLM 예외 계층별 분리 처리 (NotFoundError/AuthenticationError 즉시 raise, RateLimitError/ConnectionError 재시도)
 - QA 데이터셋: 100쌍 생성 완료 (`scripts/generate_qa.py` → `data/eval/qa_pairs.json`). QA 생성 프롬프트는 GCS `prompts/qa_generation_system.txt`를 source of truth로 사용
 - GCP 배포: Dockerfile 4종 + GitHub Actions 워크플로 4종 작성 완료. Cloud Run API는 `MONGODB_URI`를 Secret Manager에서 주입하며, Airflow VM도 Secret Manager 기반으로 운영
 - Phase 4: 코드 구현 완료. 3단계 평가 파이프라인 (RAGAS v0.4 + LLM Judge + DeepEval) + 통합 오케스트레이터 + 리포트(JSON/HTML) 구현. 평가 DAG 연결 및 prompt hash 기록 완료
 - IAM/운영보안: Cloud Run API / Airflow VM / Mongo VM 서비스 계정 분리, GCS versioning + UBLA + public access prevention 적용 완료
-- FastAPI API: 전체 구현 완료. Health, Search, Generate, Policies, Models, Evaluate 6개 엔드포인트 + Pydantic 스키마 + CORS + 미들웨어 + 에러 핸들링. python-reviewer 코드리뷰 반영 (CRITICAL 2 + HIGH 6 + MEDIUM 7 전부 수정). 모델 라우팅 에러 핸들링 추가 (404/401), 기본 검색 전략 hybrid로 변경 (CrossEncoder 로드 문제 방지), 모델 가용성 필터 (`_is_available()`) 적용
-- Phase 5 (UI): Streamlit 4페이지 구현 완료 (챗봇, 정책 탐색, 맞춤 추천, 평가 대시보드). 인프라 (API 클라이언트, 세션 상태, CSS) + 컴포넌트 3종 + 테스트 포함
+- FastAPI API: 전체 구현 완료. Health, Search, Generate, Policies, Models, Evaluate 6개 엔드포인트 + Pydantic 스키마 + CORS + 미들웨어 + 에러 핸들링. python-reviewer 코드리뷰 반영 (CRITICAL 2 + HIGH 6 + MEDIUM 7 전부 수정). generate 엔드포인트에서 `LLMError` 타입 기반 에러 핸들링으로 교체 (문자열 스니핑 제거), 기본 검색 전략 hybrid로 변경 (CrossEncoder 로드 문제 방지), 모델 가용성 필터 (`_is_available()`) 적용
+- Phase 5 (UI): Streamlit 4페이지 구현 완료 (챗봇, 정책 탐색, 맞춤 추천, 평가 대시보드). 인프라 (API 클라이언트, 세션 상태, CSS) + 컴포넌트 3종 + 테스트 포함. 정책 상세 정보 14개 필드 표시 (description, eligibility, benefits, how_to_apply 등), 지역 코드→지역명 변환 (`_format_region`), XSS 방지 (`html.escape` + URL 스킴 검증), 빈 상세 정보 안내 메시지 추가
 - Phase 6 (배포): FastAPI 백엔드 API 구현 완료 (Cloud Run 배포 대상). Dockerfile 4종 + GitHub Actions 4종 작성 완료
 - 테스트: 전체 233 passed (API 테스트 26개 + UI 테스트 포함)
 

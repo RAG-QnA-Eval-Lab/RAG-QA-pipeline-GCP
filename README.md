@@ -71,7 +71,7 @@ Hybrid RAG 기반 학생/청년 정부 정책 QnA 시스템. 멀티 LLM (GPT-4o,
 |------|-----------|----------|------|
 | GPT-4o-mini | `openai/gpt-4o-mini` | OpenAI API 직접 | `OPENAI_API_KEY` |
 | GPT-4o | `openai/gpt-4o` | OpenAI API 직접 | `OPENAI_API_KEY` |
-| Claude Sonnet 4.5 | `anthropic/claude-sonnet-4-5-20250929` | Anthropic API 직접 | `ANTHROPIC_API_KEY` |
+| Claude Sonnet 4.5 | `vertex_ai/claude-sonnet-4-5` | Vertex AI Model Garden (us-east5) | GCP 서비스 계정 |
 | Gemini 2.5 Flash | `vertex_ai/gemini-2.5-flash` | Vertex AI Model Garden | GCP 서비스 계정 |
 | Gemini 2.5 Pro | `vertex_ai/gemini-2.5-pro` | Vertex AI Model Garden (us-central1) | GCP 서비스 계정 |
 | Llama 3.3 70B | `huggingface/meta-llama/Llama-3.3-70B-Instruct` | HuggingFace Inference API | `HUGGINGFACE_API_KEY` |
@@ -130,7 +130,7 @@ MongoDB 컬렉션:
 
 | 컬렉션 | 내용 | 대표 필드 |
 |--------|------|-----------|
-| `policies` | 정책별 얇은 메타데이터 | `policy_id`, `title`, `category`, `source_name`, `gcs_path`, `status` |
+| `policies` | 정책 메타데이터 (14개 필드) | `policy_id`, `title`, `category`, `summary`, `description`, `eligibility`, `benefits`, `how_to_apply`, `application_period`, `managing_department`, `region`, `source_url`, `source_name`, `last_updated`, `gcs_path`, `status` |
 | `ingestion_logs` | 수집 실행 이력 | `source`, `collected_count`, `valid_count`, `gcs_paths`, `created_at` |
 | `gcs_assets` | GCS 객체 catalog | `asset_type`, `gcs_uri`, `object_name`, `size`, `md5_hash`, `updated`, `synced_at` |
 | `qa_datasets` | QA 데이터셋 버전/요약 | `dataset_id`, `gcs_uri`, `model`, `total_count`, `difficulty_distribution` |
@@ -311,7 +311,7 @@ cp .env.example .env
 
 ```
 OPENAI_API_KEY=              # GPT-4o/GPT-4o-mini (OpenAI API 직접)
-ANTHROPIC_API_KEY=           # Claude Sonnet 4.5 (Anthropic API 직접, 없으면 모델 목록에서 숨김)
+ANTHROPIC_API_KEY=           # (선택) Claude Sonnet 4.5 — Vertex AI Model Garden 경유 시 불필요
 HUGGINGFACE_API_KEY=         # Llama 3.3 70B (HuggingFace Inference API)
 DATA_PORTAL_API_KEY=         # 공공데이터포털 API 키
 MONGODB_URI=mongodb://admin:<password>@<MONGO_VM_IP>:27017/rag_youth_policy?authSource=admin

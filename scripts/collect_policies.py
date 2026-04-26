@@ -31,6 +31,12 @@ COLLECTORS: dict[str, type[BaseCollector]] = {
     "data_portal": DataPortalCollector,
 }
 
+_MONGO_FIELDS: tuple[str, ...] = (
+    "policy_id", "title", "category", "summary", "description",
+    "eligibility", "benefits", "how_to_apply", "application_period",
+    "managing_department", "region", "source_url", "source_name", "last_updated",
+)
+
 
 def _timestamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -150,12 +156,8 @@ def run_collection(
             gcs_raw_path = f"gs://{settings.gcs_bucket}/policies/raw/{source}/latest.json"
             metadata_list = [
                 {
-                    "policy_id": p["policy_id"],
-                    "title": p["title"],
-                    "category": p.get("category", ""),
-                    "source_name": source,
+                    **{k: p.get(k, "") for k in _MONGO_FIELDS},
                     "gcs_path": gcs_raw_path,
-                    "raw_path": p.get("raw_path", ""),
                     "status": "active",
                 }
                 for p in policy_dicts

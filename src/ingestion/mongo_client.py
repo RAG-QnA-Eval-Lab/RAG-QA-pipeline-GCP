@@ -52,6 +52,7 @@ class PolicyMetadataStore:
         self.policies.create_index("policy_id", unique=True)
         self.policies.create_index("category")
         self.policies.create_index("source_name")
+        self.policies.create_index("updated_at")
         self.ingestion_logs.create_index("source")
         self.ingestion_logs.create_index("created_at")
         self.gcs_assets.create_index("gcs_uri", unique=True)
@@ -92,11 +93,16 @@ class PolicyMetadataStore:
         return self.policies.find_one({"policy_id": policy_id}, {"_id": 0})
 
     def find_by_category(self, category: str, skip: int = 0, limit: int = 100) -> list[dict]:
-        cursor = self.policies.find({"category": category}, {"_id": 0}).skip(skip).limit(limit)
+        cursor = (
+            self.policies.find({"category": category}, {"_id": 0})
+            .sort("updated_at", -1)
+            .skip(skip)
+            .limit(limit)
+        )
         return list(cursor)
 
     def list_all(self, skip: int = 0, limit: int = 100) -> list[dict]:
-        cursor = self.policies.find({}, {"_id": 0}).skip(skip).limit(limit)
+        cursor = self.policies.find({}, {"_id": 0}).sort("updated_at", -1).skip(skip).limit(limit)
         return list(cursor)
 
     def count(self, query: dict | None = None) -> int:

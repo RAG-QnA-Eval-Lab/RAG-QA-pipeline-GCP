@@ -13,41 +13,46 @@ def render_answer(response: dict[str, Any]) -> None:
 
     sources: list[dict[str, Any]] = response.get("sources", [])
     if sources:
-        with st.expander(f"출처 ({len(sources)}건)", expanded=False):
+        with st.expander(f"참고 출처 ({len(sources)}건)", expanded=False):
             for i, src in enumerate(sources, 1):
                 title = src.get("title", "제목 없음")
                 source_name = src.get("source_name", "")
                 score = src.get("score", 0.0)
                 content = src.get("content", "")
                 preview = content[:150] + "..." if len(content) > 150 else content
-                header = f"**[{i}] {title}**"
+                header = f"{title}"
                 if source_name:
-                    header += f"  ({source_name})"
+                    header += f" &middot; {source_name}"
                 st.markdown(
                     f"""<div class="source-card">
-                        {header} &nbsp; <code>{score:.2f}</code><br/>
-                        <small>{preview}</small>
+                        <div class="source-header">[{i}] {header}
+                            <span class="source-score">{score:.2f}</span>
+                        </div>
+                        <div class="source-preview">{preview}</div>
                     </div>""",
                     unsafe_allow_html=True,
                 )
 
+    _render_response_meta(response)
+
+
+def _render_response_meta(response: dict[str, Any]) -> None:
     token_usage = response.get("token_usage", {})
     total_tokens = token_usage.get("total_tokens", 0)
-    retrieval_ms = response.get("retrieval_latency_ms", 0)
-    generation_ms = response.get("generation_latency_ms", 0)
     total_ms = response.get("total_latency_ms", 0)
     model = response.get("model", "")
     strategy = response.get("strategy", "")
 
-    parts: list[str] = []
+    chips: list[str] = []
     if model:
-        parts.append(f"모델: {model}")
+        short_model = model.split("/")[-1] if "/" in model else model
+        chips.append(f'<span class="meta-chip">{short_model}</span>')
     if strategy:
-        parts.append(f"전략: {strategy}")
+        chips.append(f'<span class="meta-chip">{strategy}</span>')
     if total_tokens:
-        parts.append(f"토큰: {total_tokens:,}")
+        chips.append(f'<span class="meta-chip">{total_tokens:,} tokens</span>')
     if total_ms:
-        parts.append(f"검색 {retrieval_ms:.0f}ms + 생성 {generation_ms:.0f}ms = {total_ms:.0f}ms")
+        chips.append(f'<span class="meta-chip">{total_ms:.0f}ms</span>')
 
-    if parts:
-        st.caption(" | ".join(parts))
+    if chips:
+        st.markdown(f'<div class="response-meta">{"".join(chips)}</div>', unsafe_allow_html=True)

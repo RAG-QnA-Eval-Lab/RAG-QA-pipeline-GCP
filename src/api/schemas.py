@@ -96,9 +96,14 @@ class PolicyItem(BaseModel):
     title: str = ""
     category: str = ""
     summary: str | None = None
+    description: str | None = None
     eligibility: str | None = None
     benefits: str | None = None
+    how_to_apply: str | None = None
+    application_period: str | None = None
+    managing_department: str | None = None
     region: str | None = None
+    source_url: str | None = None
     source_name: str | None = None
     last_updated: str | None = None
 

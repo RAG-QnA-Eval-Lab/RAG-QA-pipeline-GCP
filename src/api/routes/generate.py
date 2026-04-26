@@ -9,6 +9,7 @@ from src.api.auth import require_api_key
 from src.api.deps import get_rag_pipeline
 from src.api.rate_limit import limiter
 from src.api.schemas import GenerateRequest, GenerateResponse, SourceItem, TokenUsage
+from src.generation.llm_client import LLMError
 from src.generation.pipeline import RAGPipeline
 
 logger = logging.getLogger(__name__)
@@ -39,12 +40,10 @@ def generate(
                 temperature=body.temperature,
                 max_tokens=body.max_tokens,
             )
-    except RuntimeError as exc:
-        err_msg = str(exc)
-        if "NotFoundError" in err_msg or "404" in err_msg:
-            raise HTTPException(status_code=404, detail=f"모델을 찾을 수 없습니다: {model_id}") from exc
-        if "AuthenticationError" in err_msg or "401" in err_msg:
-            raise HTTPException(status_code=401, detail=f"모델 인증 실패: {model_id}") from exc
+    except LLMError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except Exception:
+        logger.exception("generate 엔드포인트 예기치 않은 오류 (query=%s)", body.query[:50])
         raise
 
     sources = [

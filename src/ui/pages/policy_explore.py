@@ -20,7 +20,13 @@ CATEGORY_TABS = {
 
 ITEMS_PER_PAGE = 12
 
-st.title("🔍 정책 탐색")
+st.markdown(
+    """<div class="page-header">
+        <h1>정책 탐색</h1>
+        <p>카테고리별 청년 정책을 탐색하고 상세 정보를 확인하세요.</p>
+    </div>""",
+    unsafe_allow_html=True,
+)
 
 client = get_api_client()
 
@@ -50,13 +56,12 @@ for tab, category_key in zip(tabs, tab_keys):
             st.info("해당 카테고리에 정책이 없습니다.")
             continue
 
-        st.caption(f"총 {total}건")
+        st.caption(f"총 **{total:,}**건의 정책")
 
-        cols = st.columns(3)
+        cols = st.columns(3, gap="medium")
         for i, policy in enumerate(policies):
             with cols[i % 3]:
                 render_policy_card(policy)
-                pid = policy.get("policy_id", f"policy_{i}")
                 with st.expander("상세 보기", expanded=False):
                     render_policy_detail(policy)
 
@@ -64,19 +69,20 @@ for tab, category_key in zip(tabs, tab_keys):
         total_pages = max(1, (total + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE)
 
         if total_pages > 1:
-            nav_cols = st.columns([1, 2, 1])
+            nav_cols = st.columns([1, 3, 1])
             with nav_cols[0]:
-                if page > 1 and st.button("← 이전", key=f"prev_{category_key}"):
+                if page > 1 and st.button("← 이전", key=f"prev_{category_key}", use_container_width=True):
                     st.session_state[KEY_POLICY_PAGE] = page - 1
                     st.session_state[KEY_POLICY_CATEGORY] = category_key
                     st.rerun()
             with nav_cols[1]:
                 st.markdown(
-                    f"<div style='text-align:center'>{page} / {total_pages}</div>",
+                    f"<div style='text-align:center;padding:0.5rem 0;color:#9CA3AF;font-size:0.82rem;"
+                    f"font-variant-numeric:tabular-nums'><b>{page}</b> / {total_pages}</div>",
                     unsafe_allow_html=True,
                 )
             with nav_cols[2]:
-                if page < total_pages and st.button("다음 →", key=f"next_{category_key}"):
+                if page < total_pages and st.button("다음 →", key=f"next_{category_key}", use_container_width=True):
                     st.session_state[KEY_POLICY_PAGE] = page + 1
                     st.session_state[KEY_POLICY_CATEGORY] = category_key
                     st.rerun()

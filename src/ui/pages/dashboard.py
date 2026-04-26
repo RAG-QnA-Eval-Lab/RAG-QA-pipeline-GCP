@@ -41,50 +41,83 @@ def _show_average_chart(items: list[dict[str, Any]]) -> None:
         st.caption("Plotly가 설치되지 않아 차트를 표시할 수 없습니다.")
         return
 
-    metric_sums: dict[str, float] = {}
-    metric_counts: dict[str, int] = {}
+    ragas_sums: dict[str, float] = {}
+    ragas_counts: dict[str, int] = {}
+    judge_sums: dict[str, float] = {}
+    judge_counts: dict[str, int] = {}
 
     for item in items:
         ragas = item.get("ragas") or {}
         for k, v in ragas.items():
             if v is not None:
-                metric_sums[f"RAGAS/{k}"] = metric_sums.get(f"RAGAS/{k}", 0) + v
-                metric_counts[f"RAGAS/{k}"] = metric_counts.get(f"RAGAS/{k}", 0) + 1
-
+                ragas_sums[k] = ragas_sums.get(k, 0) + v
+                ragas_counts[k] = ragas_counts.get(k, 0) + 1
         judge = item.get("judge") or {}
         for k, v in judge.items():
             if v is not None:
-                metric_sums[f"Judge/{k}"] = metric_sums.get(f"Judge/{k}", 0) + v
-                metric_counts[f"Judge/{k}"] = metric_counts.get(f"Judge/{k}", 0) + 1
+                judge_sums[k] = judge_sums.get(k, 0) + v
+                judge_counts[k] = judge_counts.get(k, 0) + 1
 
-    if not metric_sums:
+    if not ragas_sums and not judge_sums:
         return
 
-    labels = list(metric_sums.keys())
-    averages = [metric_sums[k] / metric_counts[k] for k in labels]
+    fig = go.Figure()
 
-    fig = go.Figure(data=[
-        go.Bar(
+    if ragas_sums:
+        labels = list(ragas_sums.keys())
+        avgs = [ragas_sums[k] / ragas_counts[k] for k in labels]
+        fig.add_trace(go.Bar(
+            name="RAGAS",
             x=labels,
-            y=averages,
-            marker_color=[
-                "#2563EB" if "RAGAS" in name else "#059669"
-                for name in labels
-            ],
-        )
-    ])
+            y=avgs,
+            marker_color="#5E6AD2",
+            marker_line_width=0,
+        ))
+
+    if judge_sums:
+        labels = list(judge_sums.keys())
+        avgs = [judge_sums[k] / judge_counts[k] for k in labels]
+        fig.add_trace(go.Bar(
+            name="LLM Judge",
+            x=labels,
+            y=avgs,
+            marker_color="#6C72CB",
+            marker_line_width=0,
+        ))
+
     fig.update_layout(
-        title="평균 메트릭 점수",
+        title=dict(text="평균 메트릭 점수", font=dict(size=14, family="Inter", color="#0A0A0B")),
         yaxis_title="점수",
-        yaxis_range=[0, 1],
-        height=400,
+        barmode="group",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter", color="#3B3F46", size=12),
+        height=380,
+        margin=dict(t=50, b=40, l=50, r=20),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+            font=dict(size=11),
+        ),
     )
+    fig.update_xaxes(gridcolor="rgba(0,0,0,0.04)", gridwidth=0.5)
+    fig.update_yaxes(gridcolor="rgba(0,0,0,0.04)", gridwidth=0.5, range=[0, 1])
+
     st.plotly_chart(fig, use_container_width=True)
 
 
 # ── 페이지 렌더링 ──────────────────────────────────
 
-st.title("📊 평가 대시보드")
+st.markdown(
+    """<div class="page-header">
+        <h1>평가 대시보드</h1>
+        <p>RAG 파이프라인의 3단계 평가 결과를 분석합니다.</p>
+    </div>""",
+    unsafe_allow_html=True,
+)
 
 uploaded = st.file_uploader("평가 결과 JSON 파일 업로드", type=["json"])
 uploaded_results: list[dict[str, Any]] | None = None
@@ -106,8 +139,11 @@ if uploaded_results:
     all_results["(업로드됨)"] = uploaded_results
 
 if not all_results:
-    st.info(
-        "평가 결과가 없습니다. `data/eval/results/` 디렉토리에 JSON 파일을 추가하거나 위에서 업로드하세요."
+    st.markdown(
+        '<div class="info-banner">'
+        "평가 결과가 없습니다. <code>data/eval/results/</code> 디렉토리에 JSON 파일을 추가하거나 위에서 업로드하세요."
+        "</div>",
+        unsafe_allow_html=True,
     )
     st.stop()
 
@@ -116,16 +152,20 @@ selected_name = st.selectbox("평가 결과 선택", result_names)
 
 if selected_name:
     items = all_results[selected_name]
-    st.markdown(f"### {selected_name} ({len(items)}건)")
+
+    total = len(items)
+    errors = sum(1 for it in items if it.get("error"))
+    st.markdown(f"**{selected_name}** — {total}건 중 {total - errors}건 평가 완료")
 
     if items:
-        st.markdown("#### 전체 결과 테이블")
+        st.markdown('<div class="section-label">전체 결과</div>', unsafe_allow_html=True)
         render_metrics_table(items)
 
-        st.markdown("#### 개별 결과 상세")
+        st.markdown('<div class="section-label">개별 상세</div>', unsafe_allow_html=True)
         for item in items:
             item_id = item.get("id", "unknown")
             with st.expander(f"Sample: {item_id}"):
                 render_eval_summary(item)
 
+        st.markdown('<div class="section-label">평균 메트릭 차트</div>', unsafe_allow_html=True)
         _show_average_chart(items)
