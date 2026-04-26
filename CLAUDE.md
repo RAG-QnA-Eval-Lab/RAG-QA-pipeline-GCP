@@ -22,7 +22,8 @@ src/
 │   ├── deps.py         # FastAPI Depends: get_rag_pipeline(), get_mongo()
 │   ├── schemas.py      # Pydantic 요청/응답 모델
 │   ├── errors.py       # 글로벌 예외 핸들러
-│   ├── middleware.py    # 요청 로깅 미들웨어
+│   ├── middleware.py    # 요청 로깅 미들웨어 (log_structured 사용)
+│   ├── logging_config.py   # Cloud Run JSON 구조화 로깅 (CloudRunJsonFormatter + log_structured)
 │   └── routes/         # search, generate, policies, models, evaluate
 ├── ingestion/          # 수집 → GCS 원본 저장 + MongoDB 메타데이터 → 청킹 → FAISS 인덱스 빌드
 │   ├── collectors/     # 정부 사이트별 크롤러. base.py에 Policy frozen dataclass + BaseCollector ABC
@@ -69,6 +70,15 @@ dags/                   # Airflow DAGs (VM #2에 배포)
 ├── dag_collect_index.py    # 수집+인덱싱 (매일 02:00 KST)
 ├── dag_qa_generation.py    # QA 데이터셋 생성 (수동 트리거)
 └── dag_evaluation.py       # 평가 실행 (수동 트리거)
+
+monitoring/grafana/     # Grafana 대시보드 프로비저닝
+├── dashboards/rag-pipeline.json    # 5패널: RAG 성능, LLM 비용, 일별 추이, MongoDB, 수집 현황
+└── provisioning/                   # datasources.yml (MongoDB + Cloud Monitoring), dashboards.yml
+
+scripts/
+├── setup_uptime_check.sh   # GCP Uptime Check + 이메일 알림 설정 (gcloud CLI)
+├── setup_grafana.sh        # MongoDB VM에서 Grafana 플러그인 + 대시보드 프로비저닝
+└── ...                     # 기존 수집/평가 스크립트
 ```
 
 **핵심 데이터 타입 (frozen dataclass)**:
@@ -106,9 +116,9 @@ dags/                   # Airflow DAGs (VM #2에 배포)
 - Phase 4 (평가): 완료. RAGAS v0.4 + LLM Judge + DeepEval 3단계 구현
 - FastAPI API: 완료. 6개 엔드포인트 + 미들웨어 + 에러 핸들링. `LLMError` 타입 기반 에러 핸들링
 - Phase 5 (UI): 완료. Streamlit 4페이지 (챗봇, 정책 탐색, 맞춤 추천, 평가 대시보드). 정책 상세 14개 필드 표시, 지역 코드→지역명 변환, XSS 방지
-- Phase 6 (배포+실험): Dockerfile 4종 + GitHub Actions 5종 작성 완료
+- Phase 6 (배포+실험): Dockerfile 4종 + GitHub Actions 5종 작성 완료. 구조화 JSON 로깅 + Uptime Check + Grafana 대시보드 인프라 완료
 - QA 데이터셋: 100쌍 생성 완료 (`data/eval/qa_pairs.json`)
-- 테스트: 253 passed (API 26 + UI + 평가 + 수집/검색/생성 + Phase 6 유틸리티 20)
+- 테스트: 261 passed (API 26 + UI + 평가 + 수집/검색/생성 + Phase 6 유틸리티 20 + 로깅 8)
 
 ## Commands
 

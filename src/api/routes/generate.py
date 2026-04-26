@@ -8,6 +8,7 @@ from config.models import resolve_model_key
 from src.api.auth import require_api_key
 from src.api.costs import estimate_cost_usd
 from src.api.deps import get_mongo, get_rag_pipeline
+from src.api.logging_config import log_structured
 from src.api.monitoring import get_monitoring_client
 from src.api.rate_limit import limiter
 from src.api.schemas import GenerateRequest, GenerateResponse, SourceItem, TokenUsage
@@ -79,24 +80,23 @@ def generate(
     estimated_cost = estimate_cost_usd(resp.model, usage.prompt_tokens, usage.completion_tokens)
     request_id = getattr(request.state, "request_id", "")
 
-    usage_logger.info(
-        "%s",
-        {
-            "severity": "INFO",
-            "event": "rag_request",
-            "request_id": request_id,
-            "query": body.query[:200],
-            "model": resp.model,
-            "strategy": resp.search_strategy,
-            "retrieval_ms": retrieval_latency_ms,
-            "generation_ms": generation_latency_ms,
-            "total_ms": total_latency_ms,
-            "tokens_in": usage.prompt_tokens,
-            "tokens_out": usage.completion_tokens,
-            "estimated_cost_usd": estimated_cost,
-            "source_count": len(sources),
-            "status": "success",
-        },
+    log_structured(
+        usage_logger,
+        logging.INFO,
+        "rag_request",
+        event="rag_request",
+        request_id=request_id,
+        query=body.query[:200],
+        model=resp.model,
+        strategy=resp.search_strategy,
+        retrieval_ms=retrieval_latency_ms,
+        generation_ms=generation_latency_ms,
+        total_ms=total_latency_ms,
+        tokens_in=usage.prompt_tokens,
+        tokens_out=usage.completion_tokens,
+        estimated_cost_usd=estimated_cost,
+        source_count=len(sources),
+        status="success",
     )
     get_monitoring_client().record_generation(
         model=resp.model,

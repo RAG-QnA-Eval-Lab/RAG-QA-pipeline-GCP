@@ -28,6 +28,10 @@ from pathlib import Path  # noqa: E402
 from typing import AsyncIterator  # noqa: E402
 from urllib.parse import urlsplit  # noqa: E402
 
+from src.api.logging_config import setup_json_logging  # noqa: E402
+
+setup_json_logging()  # Cloud Run stdout → Cloud Logging 구조화 JSON
+
 from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
