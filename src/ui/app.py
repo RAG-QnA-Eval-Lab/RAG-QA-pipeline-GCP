@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
-import streamlit as st
+_APP_ROOT = Path(__file__).resolve().parents[2]
+if str(_APP_ROOT) not in sys.path:
+    sys.path.insert(0, str(_APP_ROOT))
 
-from src.ui.utils.api_client import get_api_client
-from src.ui.utils.session_state import init_state
-from src.ui.utils.style import CUSTOM_CSS
+import streamlit as st  # noqa: E402
+
+from src.ui.utils.api_client import get_api_client  # noqa: E402
+from src.ui.utils.session_state import init_state  # noqa: E402
+from src.ui.utils.style import CUSTOM_CSS  # noqa: E402
 
 _PAGES_DIR = Path(__file__).resolve().parent / "pages"
 
