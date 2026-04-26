@@ -46,6 +46,7 @@ jobs:
             --image ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/collector:${{ github.sha }} \
             --region ${{ env.REGION }} \
             --memory 512Mi \
+            --service-account sa-airflow-pipeline@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
             --set-env-vars "DATA_PORTAL_API_KEY=${{ secrets.DATA_PORTAL_API_KEY }}" \
             --set-env-vars "GCS_BUCKET=rag-qna-eval-data" \
             --set-env-vars "MONGODB_URI=${{ secrets.MONGODB_URI }}"
@@ -79,6 +80,7 @@ jobs:
             --image ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/indexer:${{ github.sha }} \
             --region ${{ env.REGION }} \
             --memory 2Gi \
+            --service-account sa-airflow-pipeline@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
             --set-env-vars "VERTEXAI_PROJECT=rag-qna-eval" \
             --set-env-vars "VERTEXAI_LOCATION=asia-northeast3" \
             --set-env-vars "GCS_BUCKET=rag-qna-eval-data"
