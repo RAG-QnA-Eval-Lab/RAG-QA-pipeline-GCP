@@ -20,6 +20,7 @@ api = [
     "rank-bm25>=0.2",
     "sentence-transformers>=3.0",
     "pymongo>=4.8",
+    "slowapi>=0.1.9",
 ]
 ingestion = [
     "pymongo>=4.8",

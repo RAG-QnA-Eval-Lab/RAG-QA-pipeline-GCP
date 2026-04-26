@@ -31,7 +31,7 @@ class HealthResponse(BaseModel):
 
 class SearchRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=500)
-    strategy: SearchStrategyEnum = SearchStrategyEnum.hybrid_rerank
+    strategy: SearchStrategyEnum = SearchStrategyEnum.hybrid
     top_k: int = Field(default=5, ge=1, le=50)
 
 
@@ -55,7 +55,7 @@ class SearchResponse(BaseModel):
 class GenerateRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=500)
     model: str | None = Field(None, description="모델 키 (예: gpt-4o-mini) 또는 전체 모델 ID")
-    strategy: SearchStrategyEnum = SearchStrategyEnum.hybrid_rerank
+    strategy: SearchStrategyEnum = SearchStrategyEnum.hybrid
     top_k: int = Field(default=5, ge=1, le=50)
     temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     max_tokens: int = Field(default=2048, ge=100, le=4096)
@@ -116,6 +116,7 @@ class PoliciesResponse(BaseModel):
 class ModelInfo(BaseModel):
     key: str
     model_id: str
+    description: str
     temperature: float
     max_tokens: int
 

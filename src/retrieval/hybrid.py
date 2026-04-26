@@ -21,7 +21,9 @@ def reciprocal_rank_fusion(
 
     for results in result_lists:
         for result in results:
-            doc_key = result.metadata.get("policy_id") or result.content
+            policy_id = result.metadata.get("policy_id", "")
+            chunk_idx = result.metadata.get("chunk_index", "")
+            doc_key = f"{policy_id}_{chunk_idx}" if policy_id else result.content
             rrf_score = 1.0 / (k + result.rank)
             score_map[doc_key] = score_map.get(doc_key, 0.0) + rrf_score
             content_map[doc_key] = result.content

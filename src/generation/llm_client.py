@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import time
 
 import litellm
@@ -18,20 +17,19 @@ from src.generation import LLMResponse
 
 logger = logging.getLogger(__name__)
 
-os.environ.setdefault("VERTEXAI_PROJECT", settings.vertexai_project)
-os.environ.setdefault("VERTEXAI_LOCATION", settings.vertexai_location)
-if settings.huggingface_api_key:
-    os.environ.setdefault("HUGGINGFACE_API_KEY", settings.huggingface_api_key)
-
 litellm.drop_params = True
 
 _MAX_RETRIES = 3
 _RETRY_BASE_DELAY = 1.0
 
+_VERTEX_LOCATION_OVERRIDES: dict[str, str] = {
+    "vertex_ai/gemini-2.5-pro": "us-central1",
+}
+
 
 def generate(
     messages: list[dict[str, str]],
-    model: str = "vertex_ai/openai/gpt-4o-mini",
+    model: str | None = None,
     temperature: float = 0.0,
     max_tokens: int = 2048,
     timeout: float = 60.0,
@@ -51,17 +49,23 @@ def generate(
     Raises:
         RuntimeError: 최대 재시도 초과 시.
     """
+    model = model or settings.default_model
     last_error: Exception | None = None
 
     for attempt in range(_MAX_RETRIES):
         try:
             start = time.monotonic()
+            extra: dict = {}
+            loc = _VERTEX_LOCATION_OVERRIDES.get(model)
+            if loc:
+                extra["vertex_ai_location"] = loc
             response = completion(
                 model=model,
                 messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
                 timeout=timeout,
+                **extra,
             )
             elapsed = time.monotonic() - start
 

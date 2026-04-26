@@ -2,37 +2,50 @@
 
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from config.models import resolve_model_key
+from src.api.auth import require_api_key
 from src.api.deps import get_rag_pipeline
+from src.api.rate_limit import limiter
 from src.api.schemas import GenerateRequest, GenerateResponse, SourceItem, TokenUsage
 from src.generation.pipeline import RAGPipeline
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1", tags=["generate"])
+router = APIRouter(prefix="/api/v1", tags=["generate"], dependencies=[Depends(require_api_key)])
 
 
 @router.post("/generate", response_model=GenerateResponse)
-def generate(body: GenerateRequest, pipeline: RAGPipeline = Depends(get_rag_pipeline)) -> GenerateResponse:
+@limiter.limit("30/minute")
+def generate(
+    request: Request, body: GenerateRequest, pipeline: RAGPipeline = Depends(get_rag_pipeline)
+) -> GenerateResponse:
     model_id = resolve_model_key(body.model)
 
-    if body.no_rag:
-        resp = pipeline.run_no_rag(
-            query=body.query,
-            model=model_id,
-            temperature=body.temperature,
-            max_tokens=body.max_tokens,
-        )
-    else:
-        resp = pipeline.run(
-            query=body.query,
-            model=model_id,
-            strategy=body.strategy.value,
-            top_k=body.top_k,
-            temperature=body.temperature,
-            max_tokens=body.max_tokens,
-        )
+    try:
+        if body.no_rag:
+            resp = pipeline.run_no_rag(
+                query=body.query,
+                model=model_id,
+                temperature=body.temperature,
+                max_tokens=body.max_tokens,
+            )
+        else:
+            resp = pipeline.run(
+                query=body.query,
+                model=model_id,
+                strategy=body.strategy.value,
+                top_k=body.top_k,
+                temperature=body.temperature,
+                max_tokens=body.max_tokens,
+            )
+    except RuntimeError as exc:
+        err_msg = str(exc)
+        if "NotFoundError" in err_msg or "404" in err_msg:
+            raise HTTPException(status_code=404, detail=f"모델을 찾을 수 없습니다: {model_id}") from exc
+        if "AuthenticationError" in err_msg or "401" in err_msg:
+            raise HTTPException(status_code=401, detail=f"모델 인증 실패: {model_id}") from exc
+        raise
 
     sources = [
         SourceItem(

@@ -67,7 +67,7 @@ class RetrievalPipeline:
     def search(
         self,
         query: str,
-        strategy: SearchStrategy | str = SearchStrategy.HYBRID_RERANK,
+        strategy: SearchStrategy | str = SearchStrategy.HYBRID,
         top_k: int | None = None,
     ) -> list[SearchResult]:
         """쿼리 검색 — 전략별 분기."""
@@ -89,7 +89,11 @@ class RetrievalPipeline:
         if strategy == SearchStrategy.HYBRID:
             return hybrid_results[:top_k]
 
-        return rerank(query, hybrid_results, top_k=self.rerank_top_k)
+        try:
+            return rerank(query, hybrid_results, top_k=self.rerank_top_k)
+        except Exception:
+            logger.warning("Cross-Encoder rerank failed — falling back to hybrid results")
+            return hybrid_results[:top_k]
 
 
 if __name__ == "__main__":

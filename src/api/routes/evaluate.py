@@ -2,17 +2,20 @@
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request
 
+from src.api.auth import require_api_key
+from src.api.rate_limit import limiter
 from src.api.schemas import EvalRequest, EvalResponse, EvalResultItem
 from src.evaluation.evaluator import RAGEvaluator
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1", tags=["evaluate"])
+router = APIRouter(prefix="/api/v1", tags=["evaluate"], dependencies=[Depends(require_api_key)])
 
 
 @router.post("/evaluate", response_model=EvalResponse)
-def evaluate(body: EvalRequest) -> EvalResponse:
+@limiter.limit("5/minute")
+def evaluate(request: Request, body: EvalRequest) -> EvalResponse:
     evaluator = RAGEvaluator(judge_model=body.judge_model or "vertex_ai/openai/gpt-4o-mini")
 
     results: list[EvalResultItem] = []

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import time
 
 import litellm
@@ -11,9 +10,6 @@ import litellm
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
-
-os.environ.setdefault("VERTEXAI_PROJECT", settings.vertexai_project)
-os.environ.setdefault("VERTEXAI_LOCATION", settings.vertexai_location)
 
 BATCH_SIZE = 100
 MAX_RETRIES = 3
@@ -49,15 +45,17 @@ def embed_texts(
 
 def _embed_batch(texts: list[str], model: str) -> list[list[float]]:
     """단일 배치 임베딩 with retry."""
+    last_exc: Exception | None = None
     for attempt in range(MAX_RETRIES):
         try:
             response = litellm.embedding(model=model, input=texts)
             return [item["embedding"] for item in response.data]
-        except Exception:
-            if attempt == MAX_RETRIES - 1:
+        except Exception as exc:
+            last_exc = exc
+            if attempt < MAX_RETRIES - 1:
+                delay = RETRY_BASE_DELAY * (2**attempt)
+                logger.warning("임베딩 재시도 %d/%d (%.1fs 후)", attempt + 1, MAX_RETRIES, delay)
+                time.sleep(delay)
+            else:
                 logger.exception("임베딩 실패 (최종 시도)")
-                raise
-            delay = RETRY_BASE_DELAY * (2**attempt)
-            logger.warning("임베딩 재시도 %d/%d (%.1fs 후)", attempt + 1, MAX_RETRIES, delay)
-            time.sleep(delay)
-    raise RuntimeError("_embed_batch: 도달 불가능한 코드")
+    raise RuntimeError("임베딩 최대 재시도 초과") from last_exc

@@ -343,7 +343,7 @@ class TestResolveModel:
     def test_resolve_known_key(self) -> None:
         from src.generation.pipeline import _resolve_model
 
-        assert _resolve_model("gpt-4o-mini") == "vertex_ai/openai/gpt-4o-mini"
+        assert _resolve_model("gpt-4o-mini") == "openai/gpt-4o-mini"
 
     def test_resolve_unknown_passthrough(self) -> None:
         from src.generation.pipeline import _resolve_model

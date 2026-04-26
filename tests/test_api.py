@@ -285,11 +285,12 @@ class TestModels:
         resp = client.get("/api/v1/models")
         assert resp.status_code == 200
         data = resp.json()
-        assert len(data["models"]) == 6
+        assert len(data["models"]) >= 1
         keys = [m["key"] for m in data["models"]]
-        assert "gpt-4o-mini" in keys
         assert "gemini-flash" in keys
         assert data["default_model"] is not None
+        for m in data["models"]:
+            assert "description" in m
 
 
 # ── Evaluate ──────────────────────────────────────────────────

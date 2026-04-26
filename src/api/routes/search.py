@@ -3,20 +3,23 @@
 import logging
 import time
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
+from src.api.auth import require_api_key
 from src.api.deps import get_rag_pipeline
+from src.api.rate_limit import limiter
 from src.api.schemas import SearchRequest, SearchResponse, SearchResultItem
 from src.generation.pipeline import RAGPipeline
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1", tags=["search"])
+router = APIRouter(prefix="/api/v1", tags=["search"], dependencies=[Depends(require_api_key)])
 
 _ALLOWED_METADATA_KEYS = {"title", "category", "source_name", "region", "policy_id"}
 
 
 @router.post("/search", response_model=SearchResponse)
-def search(body: SearchRequest, pipeline: RAGPipeline = Depends(get_rag_pipeline)) -> SearchResponse:
+@limiter.limit("60/minute")
+def search(request: Request, body: SearchRequest, pipeline: RAGPipeline = Depends(get_rag_pipeline)) -> SearchResponse:
     start = time.monotonic()
     results = pipeline.retrieval.search(
         query=body.query,

@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     gcs_bucket: str = "rag-qna-eval-data"
     qa_prompt_gcs_path: str = "prompts/qa_generation_system.txt"
     api_base_url: str = ""
+    api_key: str = ""
+    environment: str = "development"
 
     vertexai_project: str = "rag-qna-eval"
     vertexai_location: str = "asia-northeast3"
@@ -30,7 +32,7 @@ class Settings(BaseSettings):
     chunk_overlap: int = 50
     top_k: int = 10
     rerank_top_k: int = 5
-    default_model: str = "vertex_ai/openai/gpt-4o-mini"
+    default_model: str = "openai/gpt-4o-mini"
 
     model_config = {"env_file": ".env"}
 

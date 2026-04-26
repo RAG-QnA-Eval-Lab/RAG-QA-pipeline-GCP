@@ -2,23 +2,43 @@
 
 from __future__ import annotations
 
-import logging
 import os
-import time
-from contextlib import asynccontextmanager
-from pathlib import Path
-from typing import AsyncIterator
-from urllib.parse import urlsplit
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"  # noqa: E402 — macOS FAISS + PyTorch OpenMP 충돌 방지
+os.environ.setdefault("OMP_NUM_THREADS", "1")  # noqa: E402
+os.environ.setdefault("MKL_NUM_THREADS", "1")  # noqa: E402
+os.environ.setdefault("MKL_THREADING_LAYER", "sequential")  # noqa: E402 — MKL이 OpenMP 대신 순차 실행
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")  # noqa: E402
+os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "1")  # noqa: E402 — macOS Accelerate
+os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")  # noqa: E402
 
-from config.settings import settings
-from src.api.errors import generic_exception_handler
-from src.api.middleware import RequestLoggingMiddleware
-from src.api.routes import evaluate, generate, models, policies, search
-from src.api.schemas import HealthResponse
+# Claude Code가 자체 프록시용 ANTHROPIC_BASE_URL + ANTHROPIC_API_KEY를 프로세스 환경에  # noqa: E402
+# 주입하는데, LiteLLM이 이걸 읽으면 실제 Anthropic API 대신 프록시로 라우팅됨.  # noqa: E402
+# api.anthropic.com이 아닌 BASE_URL이 감지되면 둘 다 제거한다.  # noqa: E402
+_anthropic_base = os.environ.get("ANTHROPIC_BASE_URL", "")  # noqa: E402
+if _anthropic_base and "api.anthropic.com" not in _anthropic_base:  # noqa: E402
+    os.environ.pop("ANTHROPIC_BASE_URL", None)  # noqa: E402
+    os.environ.pop("ANTHROPIC_API_KEY", None)  # noqa: E402
+
+import logging  # noqa: E402
+import time  # noqa: E402
+from contextlib import asynccontextmanager  # noqa: E402
+from pathlib import Path  # noqa: E402
+from typing import AsyncIterator  # noqa: E402
+from urllib.parse import urlsplit  # noqa: E402
+
+from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import JSONResponse  # noqa: E402
+from slowapi import _rate_limit_exceeded_handler  # noqa: E402
+from slowapi.errors import RateLimitExceeded  # noqa: E402
+
+from config.settings import settings  # noqa: E402
+from src.api.errors import generic_exception_handler  # noqa: E402
+from src.api.middleware import RequestLoggingMiddleware  # noqa: E402
+from src.api.rate_limit import limiter  # noqa: E402
+from src.api.routes import evaluate, generate, models, policies, search  # noqa: E402
+from src.api.schemas import HealthResponse  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +60,9 @@ def _build_cors_origins() -> list[str]:
     origins: list[str] = []
     if settings.api_base_url:
         origins.append(settings.api_base_url)
-    origins.append("http://localhost:8501")
-    origins.append("http://localhost:8000")
+    if settings.environment != "production":
+        origins.append("http://localhost:8501")
+        origins.append("http://localhost:8000")
     extra = os.getenv("ALLOWED_ORIGINS", "")
     if extra:
         origins.extend(o.strip() for o in extra.split(",") if o.strip())
@@ -51,6 +72,10 @@ def _build_cors_origins() -> list[str]:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.boot_time = time.monotonic()
+
+    from config.env_bootstrap import apply_litellm_env
+
+    apply_litellm_env()
 
     try:
         from src.generation.pipeline import RAGPipeline
@@ -89,12 +114,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_build_cors_origins(),
     allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=["Content-Type", "Authorization", "X-API-Key"],
 )
 app.add_exception_handler(Exception, generic_exception_handler)
 
@@ -117,8 +145,8 @@ def health() -> JSONResponse:
         try:
             mongo.client.admin.command("ping", maxTimeMS=500)
             mongo_ok = True
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("MongoDB health check failed: %s", exc)
 
     uptime = round(time.monotonic() - getattr(app.state, "boot_time", time.monotonic()), 1)
 

@@ -2,7 +2,7 @@
 
 Hybrid RAG 기반 학생/청년 정부 정책 QnA 시스템. 멀티 LLM (GPT-4o, Claude, Gemini, Llama3) 응답 신뢰성을 3단계 자동 평가 (RAGAS v0.4 + LLM Judge + DeepEval)로 비교하는 파이프라인.
 
-> **구현 현황** (2026-04-26): 수집/검색/생성/평가/FastAPI API 전체 완료 (210 tests passed). 정책 2,235건 수집, QA 100쌍 생성, FAISS 인덱스 빌드 완료. UI(Phase 5) 미착수.
+> **구현 현황** (2026-04-26): 수집/검색/생성/평가/FastAPI API/Streamlit UI 전체 완료 (233 tests passed). 정책 2,235건 수집, QA 100쌍 생성, FAISS 인덱스 빌드 완료. UI 4페이지 구현 완료 (챗봇, 정책 탐색, 맞춤 추천, 평가 대시보드).
 
 ---
 
@@ -17,7 +17,7 @@ Hybrid RAG 기반 학생/청년 정부 정책 QnA 시스템. 멀티 LLM (GPT-4o,
 - **GCP 배포**: Cloud Run scale-to-zero (BE FastAPI 2Gi / FE Streamlit 512Mi)
 - **CI/CD**: GitHub Actions 4개 워크플로 (lint+test, BE/FE/Jobs 자동 배포)
 - **Airflow 오케스트레이션**: 수집+인덱싱 DAG (매일 02:00 KST), 평가/QA 생성 DAG (수동)
-- **제품 수준 UI** (예정): Streamlit 6페이지 (정책 탐색 / QnA 챗봇 / 정책 비교 / 맞춤 추천 / 평가 대시보드 / 소개)
+- **Streamlit UI**: 4페이지 구현 완료 (QnA 챗봇 / 정책 탐색 / 맞춤 추천 / 평가 대시보드)
 
 ---
 
@@ -54,14 +54,14 @@ Hybrid RAG 기반 학생/청년 정부 정책 QnA 시스템. 멀티 LLM (GPT-4o,
 | 데이터 수집 | httpx + BeautifulSoup4, PyMuPDF |
 | 한국어 처리 | kss (문장 분리), tiktoken cl100k_base (토큰 카운트) |
 | 백엔드 | FastAPI + uvicorn |
-| 프론트엔드 | Streamlit (예정) |
+| 프론트엔드 | Streamlit (4페이지 구현 완료) |
 | 데이터 저장 | GCS (원본/정규화/QA/프롬프트/인덱스 source of truth), MongoDB (Compass 조회용 메타데이터/catalog) |
 | 워크플로 오케스트레이션 | Apache Airflow 2.9.3 (self-hosted VM) |
 | 배포 | GCP Cloud Run, Artifact Registry |
 | 모니터링 | Grafana + GCP Cloud Monitoring + Cloud Logging |
 | CI/CD | GitHub Actions (경로 필터 기반 자동 배포) |
 | 린터/포매터 | ruff |
-| 테스트 | pytest (210 tests) |
+| 테스트 | pytest (233 tests) |
 
 ### LLM 모델 라우팅
 
@@ -71,9 +71,9 @@ Hybrid RAG 기반 학생/청년 정부 정책 QnA 시스템. 멀티 LLM (GPT-4o,
 |------|-----------|----------|------|
 | GPT-4o-mini | `openai/gpt-4o-mini` | OpenAI API 직접 | `OPENAI_API_KEY` |
 | GPT-4o | `openai/gpt-4o` | OpenAI API 직접 | `OPENAI_API_KEY` |
-| Claude Sonnet 4.5 | `vertex_ai/claude-sonnet-4-5` | Vertex AI Model Garden | GCP 서비스 계정 |
+| Claude Sonnet 4.5 | `anthropic/claude-sonnet-4-5-20250929` | Anthropic API 직접 | `ANTHROPIC_API_KEY` |
 | Gemini 2.5 Flash | `vertex_ai/gemini-2.5-flash` | Vertex AI Model Garden | GCP 서비스 계정 |
-| Gemini 2.5 Pro | `vertex_ai/gemini-2.5-pro` | Vertex AI Model Garden | GCP 서비스 계정 |
+| Gemini 2.5 Pro | `vertex_ai/gemini-2.5-pro` | Vertex AI Model Garden (us-central1) | GCP 서비스 계정 |
 | Llama 3.3 70B | `huggingface/meta-llama/Llama-3.3-70B-Instruct` | HuggingFace Inference API | `HUGGINGFACE_API_KEY` |
 
 임베딩은 Google `text-embedding-004`를 Vertex AI 경유로 호출 (768차원).
@@ -269,7 +269,7 @@ src/
 │   ├── safety_metrics.py # DeepEval HallucinationMetric
 │   ├── evaluator.py      # RAGEvaluator 통합 오케스트레이터
 │   └── report.py         # JSON + HTML 리포트 생성
-└── ui/                   # (미착수) Streamlit 6페이지 (Cloud Run #2)
+└── ui/                   # ✅ Streamlit 4페이지 (Cloud Run #2) — 챗봇, 정책 탐색, 맞춤 추천, 평가 대시보드
 
 config/                   # ✅ pydantic-settings, 모델 목록, 데이터 소스 설정
 dags/                     # ✅ Airflow DAGs (수집+인덱싱, 평가, QA 생성)
@@ -278,7 +278,7 @@ data/
 ├── index/                # FAISS 인덱스 (faiss.index 16.5MB + metadata.pkl 3MB)
 ├── eval/qa_pairs.json    # ✅ 평가 QA 데이터셋 (100쌍 생성 완료)
 └── results/              # 평가 결과 JSON
-tests/                    # 210 tests passed
+tests/                    # 233 tests passed
 ```
 
 ---
@@ -311,6 +311,7 @@ cp .env.example .env
 
 ```
 OPENAI_API_KEY=              # GPT-4o/GPT-4o-mini (OpenAI API 직접)
+ANTHROPIC_API_KEY=           # Claude Sonnet 4.5 (Anthropic API 직접, 없으면 모델 목록에서 숨김)
 HUGGINGFACE_API_KEY=         # Llama 3.3 70B (HuggingFace Inference API)
 DATA_PORTAL_API_KEY=         # 공공데이터포털 API 키
 MONGODB_URI=mongodb://admin:<password>@<MONGO_VM_IP>:27017/rag_youth_policy?authSource=admin
@@ -353,7 +354,7 @@ streamlit run src/ui/app.py
 ### 테스트 및 린트
 
 ```bash
-pytest                           # 전체 테스트 (210 passed)
+pytest                           # 전체 테스트 (233 passed)
 pytest tests/test_api.py         # 단일 모듈
 pytest -k "test_chunk_size"      # 패턴 매칭
 pytest --cov=src --cov-report=term-missing  # 커버리지
