@@ -11,7 +11,9 @@ dist/
 build/
 tests/
 docs/
-data/
+data/*
+!data/eval/
+!data/eval/**
 *.md
 sa-key*.json
 .env

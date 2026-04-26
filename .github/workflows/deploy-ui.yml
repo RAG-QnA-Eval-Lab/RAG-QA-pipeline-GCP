@@ -39,9 +39,17 @@ jobs:
       - name: Deploy UI service
         run: |
           ENV_VARS="ENVIRONMENT=production"
-          if [ -n "${{ vars.API_BASE_URL }}" ]; then
-            ENV_VARS="${ENV_VARS},API_BASE_URL=${{ vars.API_BASE_URL }}"
+          API_BASE_URL="${{ vars.API_BASE_URL }}"
+          if [ -z "${API_BASE_URL}" ]; then
+            API_BASE_URL="$(gcloud run services describe rag-youth-policy-api \
+              --region ${{ env.REGION }} \
+              --format='value(status.url)' 2>/dev/null || true)"
           fi
+          if [ -z "${API_BASE_URL}" ]; then
+            echo "API_BASE_URL is empty and rag-youth-policy-api URL could not be resolved." >&2
+            exit 1
+          fi
+          ENV_VARS="${ENV_VARS},API_BASE_URL=${API_BASE_URL}"
           gcloud run deploy rag-youth-policy-ui \
             --image ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/ui:${{ github.sha }} \
             --region ${{ env.REGION }} \
@@ -50,6 +58,7 @@ jobs:
             --timeout 300 \
             --min-instances 0 \
             --max-instances 1 \
+            --service-account sa-rag-api@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
             --set-env-vars "${ENV_VARS}" \
             --update-secrets "API_KEY=api-key:latest" \
             --allow-unauthenticated
