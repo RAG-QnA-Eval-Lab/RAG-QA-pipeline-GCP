@@ -10,6 +10,28 @@
   - Cloud Run `PORT` 환경변수 기반으로 Streamlit 실행
   - GitHub repository variable `API_BASE_URL`에 API 서비스 URL 설정
 
+배포 시간 최적화를 위해 `--allow-unauthenticated`는 매 배포에서 제거했다.
+서비스를 새로 만들거나 IAM이 초기화된 경우에만 1회 실행한다.
+
+```bash
+gcloud run services add-iam-policy-binding rag-youth-policy-api \
+  --region asia-northeast3 \
+  --member allUsers \
+  --role roles/run.invoker
+
+gcloud run services add-iam-policy-binding rag-youth-policy-ui \
+  --region asia-northeast3 \
+  --member allUsers \
+  --role roles/run.invoker
+```
+
+API 이미지에는 기본적으로 Cross-Encoder 리랭커(`sentence-transformers`)를 포함하지 않는다.
+Cloud Run 기본 전략은 `hybrid`이며, 로컬/실험에서 리랭커가 필요하면 다음처럼 설치한다.
+
+```bash
+pip install -e ".[api,rerank]"
+```
+
 ## 2. 헬스체크
 
 `GET /health`는 다음을 확인한다.

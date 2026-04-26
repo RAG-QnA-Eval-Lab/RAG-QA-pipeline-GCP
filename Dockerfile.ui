@@ -1,7 +1,9 @@
+# syntax=docker/dockerfile:1.7
 FROM python:3.11-slim
 WORKDIR /app
 COPY pyproject.toml .
-RUN pip install --no-cache-dir ".[ui,viz]"
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --disable-pip-version-check ".[ui]" "plotly>=5.0"
 COPY src/ui/ src/ui/
 ENV PORT=8080
 EXPOSE 8080

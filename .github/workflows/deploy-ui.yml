@@ -36,6 +36,7 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/ui:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false
       - name: Deploy UI service
         run: |
           ENV_VARS="ENVIRONMENT=production"
@@ -60,5 +61,4 @@ jobs:
             --max-instances 1 \
             --service-account sa-rag-api@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
             --set-env-vars "${ENV_VARS}" \
-            --update-secrets "API_KEY=api-key:latest" \
-            --allow-unauthenticated
+            --update-secrets "API_KEY=api-key:latest"

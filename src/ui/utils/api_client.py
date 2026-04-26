@@ -67,7 +67,7 @@ class APIClient:
     def search(
         self,
         query: str,
-        strategy: str = "hybrid_rerank",
+        strategy: str = "hybrid",
         top_k: int = 5,
     ) -> dict[str, Any] | None:
         return self._post(
@@ -82,7 +82,7 @@ class APIClient:
         query: str,
         *,
         model: str | None = None,
-        strategy: str = "hybrid_rerank",
+        strategy: str = "hybrid",
         top_k: int = 5,
         temperature: float = 0.0,
         max_tokens: int = 2048,

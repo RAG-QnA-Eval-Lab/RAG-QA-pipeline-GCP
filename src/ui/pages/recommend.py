@@ -67,7 +67,7 @@ if submitted:
     )
 
     with st.spinner("맞춤 정책을 찾고 있습니다..."):
-        resp = client.generate(query=query, strategy="hybrid_rerank", top_k=10)
+        resp = client.generate(query=query, strategy="hybrid", top_k=10)
 
     if resp:
         st.markdown('<div class="section-label">추천 결과</div>', unsafe_allow_html=True)

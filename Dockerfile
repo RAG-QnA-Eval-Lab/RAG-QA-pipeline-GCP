@@ -1,7 +1,9 @@
+# syntax=docker/dockerfile:1.7
 FROM python:3.11-slim
 WORKDIR /app
 COPY pyproject.toml .
-RUN pip install --no-cache-dir ".[api,ko]"
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --disable-pip-version-check ".[api]"
 COPY config/ config/
 COPY src/ src/
 COPY data/eval/ data/eval/
