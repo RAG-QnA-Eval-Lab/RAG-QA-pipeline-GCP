@@ -17,13 +17,29 @@ class SearchStrategyEnum(str, Enum):
 # ── Health ──────────────────────────────────────────────────
 
 
+class SourceStatus(BaseModel):
+    last_run: str | None = None
+    status: str | None = None
+    count: int = 0
+
+
+class DataPipelineStatus(BaseModel):
+    last_ingestion: str | None = None
+    total_policies: int = 0
+    index_sync_status: str = "unknown"
+    sources: dict[str, SourceStatus] = Field(default_factory=dict)
+
+
 class HealthResponse(BaseModel):
     status: str
     faiss_loaded: bool
     faiss_doc_count: int
+    faiss_last_updated: str | None = None
     mongodb_connected: bool
+    gcs_accessible: bool | None = None
     uptime_seconds: float
     version: str
+    data_pipeline: DataPipelineStatus | None = None
 
 
 # ── Search ──────────────────────────────────────────────────
@@ -147,11 +163,29 @@ class EvalRequest(BaseModel):
     judge_model: str | None = None
 
 
+class RagasScores(BaseModel):
+    faithfulness: float | None = None
+    answer_relevancy: float | None = None
+    context_precision: float | None = None
+    context_recall: float | None = None
+
+
+class JudgeScores(BaseModel):
+    citation_accuracy: float = 0.0
+    completeness: float = 0.0
+    readability: float = 0.0
+    average: float = 0.0
+
+
+class SafetyScores(BaseModel):
+    hallucination_score: float | None = None
+
+
 class EvalResultItem(BaseModel):
     id: str
-    ragas: dict | None = None
-    judge: dict | None = None
-    safety: dict | None = None
+    ragas: RagasScores | None = None
+    judge: JudgeScores | None = None
+    safety: SafetyScores | None = None
     latency: float = 0.0
     error: str | None = None
 

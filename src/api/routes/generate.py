@@ -6,20 +6,27 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from config.models import resolve_model_key
 from src.api.auth import require_api_key
-from src.api.deps import get_rag_pipeline
+from src.api.costs import estimate_cost_usd
+from src.api.deps import get_mongo, get_rag_pipeline
+from src.api.monitoring import get_monitoring_client
 from src.api.rate_limit import limiter
 from src.api.schemas import GenerateRequest, GenerateResponse, SourceItem, TokenUsage
 from src.generation.llm_client import LLMError
 from src.generation.pipeline import RAGPipeline
+from src.ingestion.mongo_client import PolicyMetadataStore
 
 logger = logging.getLogger(__name__)
+usage_logger = logging.getLogger("api.rag")
 router = APIRouter(prefix="/api/v1", tags=["generate"], dependencies=[Depends(require_api_key)])
 
 
 @router.post("/generate", response_model=GenerateResponse)
 @limiter.limit("30/minute")
 def generate(
-    request: Request, body: GenerateRequest, pipeline: RAGPipeline = Depends(get_rag_pipeline)
+    request: Request,
+    body: GenerateRequest,
+    pipeline: RAGPipeline = Depends(get_rag_pipeline),
+    mongo: PolicyMetadataStore | None = Depends(get_mongo),
 ) -> GenerateResponse:
     model_id = resolve_model_key(body.model)
 
@@ -66,6 +73,53 @@ def generate(
     )
 
     total_latency = resp.retrieval_latency + resp.generation_latency
+    retrieval_latency_ms = round(resp.retrieval_latency * 1000, 1)
+    generation_latency_ms = round(resp.generation_latency * 1000, 1)
+    total_latency_ms = round(total_latency * 1000, 1)
+    estimated_cost = estimate_cost_usd(resp.model, usage.prompt_tokens, usage.completion_tokens)
+    request_id = getattr(request.state, "request_id", "")
+
+    usage_logger.info(
+        "%s",
+        {
+            "severity": "INFO",
+            "event": "rag_request",
+            "request_id": request_id,
+            "query": body.query[:200],
+            "model": resp.model,
+            "strategy": resp.search_strategy,
+            "retrieval_ms": retrieval_latency_ms,
+            "generation_ms": generation_latency_ms,
+            "total_ms": total_latency_ms,
+            "tokens_in": usage.prompt_tokens,
+            "tokens_out": usage.completion_tokens,
+            "estimated_cost_usd": estimated_cost,
+            "source_count": len(sources),
+            "status": "success",
+        },
+    )
+    get_monitoring_client().record_generation(
+        model=resp.model,
+        strategy=resp.search_strategy,
+        retrieval_latency_ms=retrieval_latency_ms,
+        generation_latency_ms=generation_latency_ms,
+        tokens_used=usage.total_tokens,
+        estimated_cost_usd=estimated_cost,
+    )
+    if mongo:
+        try:
+            mongo.log_api_usage({
+                "request_id": request_id,
+                "model": resp.model,
+                "tokens_in": usage.prompt_tokens,
+                "tokens_out": usage.completion_tokens,
+                "cost_usd": estimated_cost,
+                "latency_ms": total_latency_ms,
+                "strategy": resp.search_strategy,
+                "status": "success",
+            })
+        except Exception as exc:
+            logger.debug("api_usage_logs insert failed: %s", exc)
 
     return GenerateResponse(
         answer=resp.answer,
@@ -73,7 +127,7 @@ def generate(
         model=resp.model,
         strategy=resp.search_strategy,
         token_usage=usage,
-        retrieval_latency_ms=round(resp.retrieval_latency * 1000, 1),
-        generation_latency_ms=round(resp.generation_latency * 1000, 1),
-        total_latency_ms=round(total_latency * 1000, 1),
+        retrieval_latency_ms=retrieval_latency_ms,
+        generation_latency_ms=generation_latency_ms,
+        total_latency_ms=total_latency_ms,
     )

@@ -108,7 +108,7 @@ dags/                   # Airflow DAGs (VM #2에 배포)
 - Phase 5 (UI): 완료. Streamlit 4페이지 (챗봇, 정책 탐색, 맞춤 추천, 평가 대시보드). 정책 상세 14개 필드 표시, 지역 코드→지역명 변환, XSS 방지
 - Phase 6 (배포+실험): Dockerfile 4종 + GitHub Actions 4종 작성 완료
 - QA 데이터셋: 100쌍 생성 완료 (`data/eval/qa_pairs.json`)
-- 테스트: 233 passed (API 26 + UI + 평가 + 수집/검색/생성)
+- 테스트: 253 passed (API 26 + UI + 평가 + 수집/검색/생성 + Phase 6 유틸리티 20)
 
 ## Commands
 
@@ -116,7 +116,7 @@ dags/                   # Airflow DAGs (VM #2에 배포)
 # Setup
 pip install -e ".[dev,api,ingestion,indexer,ko,eval,monitoring,crawl,ui,viz]"
 
-# Tests (233 tests)
+# Tests (253 tests)
 pytest                              # 전체
 pytest tests/test_api.py            # 단일 모듈
 pytest -k "test_chunk_size"         # 패턴 매칭

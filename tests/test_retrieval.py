@@ -16,7 +16,6 @@ from src.retrieval.bm25_store import build_bm25_index, search_bm25, tokenize_kor
 from src.retrieval.hybrid import hybrid_search, reciprocal_rank_fusion
 from src.retrieval.vector_store import load_index, search
 
-
 # ──────────────────────────────────────────────
 # Fixtures
 # ──────────────────────────────────────────────
@@ -26,7 +25,11 @@ from src.retrieval.vector_store import load_index, search
 def sample_metadata() -> list[dict]:
     return [
         {"content": "청년 월세 지원 정책입니다. 월 최대 20만원 지원.", "title": "월세지원", "category": "housing"},
-        {"content": "국민취업지원제도는 취업 준비 청년을 위한 정책입니다.", "title": "국민취업지원", "category": "employment"},
+        {
+            "content": "국민취업지원제도는 취업 준비 청년을 위한 정책입니다.",
+            "title": "국민취업지원",
+            "category": "employment",
+        },
         {"content": "청년 전세자금 대출 정책. 최대 1억원까지 저금리 대출.", "title": "전세대출", "category": "housing"},
         {"content": "대학생 학자금 대출 지원. 등록금 전액 대출 가능.", "title": "학자금대출", "category": "education"},
         {"content": "청년 창업 지원금. 최대 5천만원 사업비 지원.", "title": "창업지원", "category": "startup"},

@@ -3,28 +3,24 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from unittest.mock import patch
-
-import pytest
 
 from src.generation import LLMResponse
 
 sys_path_fix = Path(__file__).parent.parent
-import sys
-
 sys.path.insert(0, str(sys_path_fix))
 
-from scripts.generate_qa import (
+from scripts.generate_qa import (  # noqa: E402
     assemble_output,
     build_qa_prompt,
+    generate_qa_for_policy,
     load_qa_prompt,
-    load_policies,
     parse_qa_response,
     plan_difficulty_assignments,
     score_policy_richness,
     select_policies,
-    generate_qa_for_policy,
 )
 
 

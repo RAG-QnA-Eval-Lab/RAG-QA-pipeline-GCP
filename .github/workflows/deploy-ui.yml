@@ -38,7 +38,18 @@ jobs:
           cache-to: type=gha,mode=max
       - name: Deploy UI service
         run: |
+          ENV_VARS="ENVIRONMENT=production"
+          if [ -n "${{ vars.API_BASE_URL }}" ]; then
+            ENV_VARS="${ENV_VARS},API_BASE_URL=${{ vars.API_BASE_URL }}"
+          fi
           gcloud run deploy rag-youth-policy-ui \
             --image ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/repo/ui:${{ github.sha }} \
             --region ${{ env.REGION }} \
-            --memory 512Mi
+            --memory 512Mi \
+            --cpu 1 \
+            --timeout 300 \
+            --min-instances 0 \
+            --max-instances 1 \
+            --set-env-vars "${ENV_VARS}" \
+            --update-secrets "API_KEY=api-key:latest" \
+            --allow-unauthenticated

@@ -22,12 +22,17 @@ class Settings(BaseSettings):
     api_base_url: str = ""
     api_key: str = ""
     environment: str = "development"
+    enable_cloud_monitoring: bool = False
 
     vertexai_project: str = "rag-qna-eval"
     vertexai_location: str = "asia-northeast3"
+    gcp_location: str = "asia-northeast3"
 
     embedding_model: str = "vertex_ai/text-embedding-004"
     embedding_dim: int = 768
+    index_gcs_prefix: str = "index"
+    download_index_from_gcs: bool = True
+    force_gcs_index_download: bool = False
     chunk_size: int = 512
     chunk_overlap: int = 50
     top_k: int = 10

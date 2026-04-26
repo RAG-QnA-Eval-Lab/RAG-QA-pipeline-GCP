@@ -2,7 +2,7 @@
 
 Hybrid RAG 기반 학생/청년 정부 정책 QnA 시스템. 멀티 LLM (GPT-4o, Claude, Gemini, Llama3) 응답 신뢰성을 3단계 자동 평가 (RAGAS v0.4 + LLM Judge + DeepEval)로 비교하는 파이프라인.
 
-> **구현 현황** (2026-04-26): 수집/검색/생성/평가/FastAPI API/Streamlit UI 전체 완료 (233 tests passed). 정책 2,235건 수집, QA 100쌍 생성, FAISS 인덱스 빌드 완료. UI 4페이지 구현 완료 (챗봇, 정책 탐색, 맞춤 추천, 평가 대시보드).
+> **구현 현황** (2026-04-26): 수집/검색/생성/평가/FastAPI API/Streamlit UI 전체 완료 (253 tests passed). 정책 2,235건 수집, QA 100쌍 생성, FAISS 인덱스 빌드 완료. UI 4페이지 구현 완료 (챗봇, 정책 탐색, 맞춤 추천, 평가 대시보드).
 
 ---
 
@@ -61,7 +61,7 @@ Hybrid RAG 기반 학생/청년 정부 정책 QnA 시스템. 멀티 LLM (GPT-4o,
 | 모니터링 | Grafana + GCP Cloud Monitoring + Cloud Logging |
 | CI/CD | GitHub Actions (경로 필터 기반 자동 배포) |
 | 린터/포매터 | ruff |
-| 테스트 | pytest (233 tests) |
+| 테스트 | pytest (253 tests) |
 
 ### LLM 모델 라우팅
 
@@ -278,7 +278,7 @@ data/
 ├── index/                # FAISS 인덱스 (faiss.index 16.5MB + metadata.pkl 3MB)
 ├── eval/qa_pairs.json    # ✅ 평가 QA 데이터셋 (100쌍 생성 완료)
 └── results/              # 평가 결과 JSON
-tests/                    # 233 tests passed
+tests/                    # 253 tests passed
 ```
 
 ---
@@ -354,7 +354,7 @@ streamlit run src/ui/app.py
 ### 테스트 및 린트
 
 ```bash
-pytest                           # 전체 테스트 (233 passed)
+pytest                           # 전체 테스트 (253 passed)
 pytest tests/test_api.py         # 단일 모듈
 pytest -k "test_chunk_size"      # 패턴 매칭
 pytest --cov=src --cov-report=term-missing  # 커버리지

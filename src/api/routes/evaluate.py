@@ -6,7 +6,14 @@ from fastapi import APIRouter, Depends, Request
 
 from src.api.auth import require_api_key
 from src.api.rate_limit import limiter
-from src.api.schemas import EvalRequest, EvalResponse, EvalResultItem
+from src.api.schemas import (
+    EvalRequest,
+    EvalResponse,
+    EvalResultItem,
+    JudgeScores,
+    RagasScores,
+    SafetyScores,
+)
 from src.evaluation.evaluator import RAGEvaluator
 
 logger = logging.getLogger(__name__)
@@ -29,32 +36,24 @@ def evaluate(request: Request, body: EvalRequest) -> EvalResponse:
                 answer=sample.answer,
                 ground_truth=sample.ground_truth,
             )
-            ragas_dict = None
-            if er.ragas:
-                ragas_dict = {
-                    "faithfulness": er.ragas.faithfulness,
-                    "answer_relevancy": er.ragas.answer_relevancy,
-                    "context_precision": er.ragas.context_precision,
-                    "context_recall": er.ragas.context_recall,
-                }
-            judge_dict = None
-            if er.judge:
-                judge_dict = {
-                    "citation_accuracy": er.judge.citation_accuracy,
-                    "completeness": er.judge.completeness,
-                    "readability": er.judge.readability,
-                    "average": er.judge.average,
-                }
-            safety_dict = None
-            if er.safety:
-                safety_dict = {"hallucination_score": er.safety.hallucination_score}
-
             results.append(
                 EvalResultItem(
                     id=sample.id,
-                    ragas=ragas_dict,
-                    judge=judge_dict,
-                    safety=safety_dict,
+                    ragas=RagasScores(
+                        faithfulness=er.ragas.faithfulness,
+                        answer_relevancy=er.ragas.answer_relevancy,
+                        context_precision=er.ragas.context_precision,
+                        context_recall=er.ragas.context_recall,
+                    ) if er.ragas else None,
+                    judge=JudgeScores(
+                        citation_accuracy=er.judge.citation_accuracy,
+                        completeness=er.judge.completeness,
+                        readability=er.judge.readability,
+                        average=er.judge.average,
+                    ) if er.judge else None,
+                    safety=SafetyScores(
+                        hallucination_score=er.safety.hallucination_score,
+                    ) if er.safety else None,
                     latency=er.latency,
                 )
             )

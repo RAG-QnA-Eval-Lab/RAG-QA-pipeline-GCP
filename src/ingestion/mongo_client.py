@@ -48,6 +48,10 @@ class PolicyMetadataStore:
     def qa_datasets(self) -> Collection:
         return self.db["qa_datasets"]
 
+    @property
+    def api_usage_logs(self) -> Collection:
+        return self.db["api_usage_logs"]
+
     def ensure_indexes(self) -> None:
         self.policies.create_index("policy_id", unique=True)
         self.policies.create_index("category")
@@ -62,6 +66,10 @@ class PolicyMetadataStore:
         self.qa_datasets.create_index("dataset_id", unique=True)
         self.qa_datasets.create_index("generated_at")
         self.qa_datasets.create_index("gcs_uri")
+        self.api_usage_logs.create_index("timestamp")
+        self.api_usage_logs.create_index("request_id")
+        self.api_usage_logs.create_index("model")
+        self.api_usage_logs.create_index("status")
 
     def upsert_policy(self, metadata: dict) -> None:
         """정책 메타데이터 upsert (policy_id 기준)."""
@@ -174,6 +182,37 @@ class PolicyMetadataStore:
             "errors": errors or [],
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
+
+    def log_api_usage(self, record: dict) -> None:
+        """LLM API 사용량/비용 로그 기록."""
+        doc = {"timestamp": datetime.now(timezone.utc).isoformat(), **record}
+        self.api_usage_logs.insert_one(doc)
+
+    def get_data_pipeline_status(self) -> dict:
+        """헬스체크/Grafana용 데이터 적재 상태 요약."""
+        latest = self.ingestion_logs.find_one({}, {"_id": 0}, sort=[("created_at", -1)])
+
+        pipeline = [
+            {"$sort": {"created_at": -1}},
+            {"$group": {
+                "_id": "$source",
+                "last_run": {"$first": {"$ifNull": ["$created_at", "$finished_at"]}},
+                "status": {"$first": "$status"},
+                "count": {"$first": {"$ifNull": ["$valid_count", {"$ifNull": ["$total", "$collected_count"]}]}},
+            }},
+        ]
+        sources = {
+            doc["_id"]: {"last_run": doc.get("last_run"), "status": doc.get("status"), "count": doc.get("count", 0)}
+            for doc in self.ingestion_logs.aggregate(pipeline)
+            if doc.get("_id")
+        }
+
+        return {
+            "last_ingestion": (latest or {}).get("created_at") or (latest or {}).get("finished_at"),
+            "total_policies": self.count(),
+            "index_sync_status": "unknown",
+            "sources": sources,
+        }
 
     def close(self) -> None:
         if self._client:

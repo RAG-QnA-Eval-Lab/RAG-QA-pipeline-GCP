@@ -20,6 +20,8 @@ api = [
     "rank-bm25>=0.2",
     "sentence-transformers>=3.0",
     "pymongo>=4.8",
+    "google-cloud-storage>=2.18",
+    "google-cloud-monitoring>=2.22",
     "slowapi>=0.1.9",
 ]
 ingestion = [

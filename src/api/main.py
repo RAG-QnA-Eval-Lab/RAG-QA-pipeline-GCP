@@ -21,6 +21,7 @@ if _anthropic_base and "api.anthropic.com" not in _anthropic_base:  # noqa: E402
     os.environ.pop("ANTHROPIC_API_KEY", None)  # noqa: E402
 
 import logging  # noqa: E402
+import threading  # noqa: E402
 import time  # noqa: E402
 from contextlib import asynccontextmanager  # noqa: E402
 from pathlib import Path  # noqa: E402
@@ -34,15 +35,20 @@ from slowapi import _rate_limit_exceeded_handler  # noqa: E402
 from slowapi.errors import RateLimitExceeded  # noqa: E402
 
 from config.settings import settings  # noqa: E402
+from src.api.cloud_run import check_gcs_access, ensure_index_files, get_index_last_updated  # noqa: E402
 from src.api.errors import generic_exception_handler  # noqa: E402
 from src.api.middleware import RequestLoggingMiddleware  # noqa: E402
 from src.api.rate_limit import limiter  # noqa: E402
 from src.api.routes import evaluate, generate, models, policies, search  # noqa: E402
-from src.api.schemas import HealthResponse  # noqa: E402
+from src.api.schemas import DataPipelineStatus, HealthResponse, SourceStatus  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 _APP_VERSION = "0.2.0"
+_PIPELINE_STATUS_TTL = 60
+_pipeline_status_cache: dict | None = None
+_pipeline_status_ts: float = 0.0
+_pipeline_status_lock = threading.Lock()
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _INDEX_DIR = Path(os.getenv("INDEX_DIR", str(_REPO_ROOT / "data" / "index")))
 
@@ -80,6 +86,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         from src.generation.pipeline import RAGPipeline
 
+        app.state.index_status = ensure_index_files(_INDEX_DIR)
         logger.info("Loading FAISS index from %s ...", _INDEX_DIR)
         app.state.rag_pipeline = RAGPipeline(index_dir=_INDEX_DIR)
         doc_count = app.state.rag_pipeline.retrieval.index.ntotal
@@ -87,6 +94,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception:
         logger.exception("FAISS index load failed — search/generate endpoints will return 503")
         app.state.rag_pipeline = None
+        app.state.index_status = getattr(app.state, "index_status", {"available": False})
 
     mongo = None
     try:
@@ -141,14 +149,34 @@ def health() -> JSONResponse:
 
     mongo = getattr(app.state, "mongo", None)
     mongo_ok = False
+    data_pipeline = None
     if mongo:
         try:
             mongo.client.admin.command("ping", maxTimeMS=500)
             mongo_ok = True
+            try:
+                global _pipeline_status_cache, _pipeline_status_ts  # noqa: PLW0603
+                now = time.monotonic()
+                with _pipeline_status_lock:
+                    if _pipeline_status_cache is None or (now - _pipeline_status_ts) > _PIPELINE_STATUS_TTL:
+                        raw = mongo.get_data_pipeline_status()
+                        _pipeline_status_cache = DataPipelineStatus(
+                            last_ingestion=raw.get("last_ingestion"),
+                            total_policies=raw.get("total_policies", 0),
+                            index_sync_status=raw.get("index_sync_status", "unknown"),
+                            sources={k: SourceStatus(**v) for k, v in raw.get("sources", {}).items()},
+                        )
+                        _pipeline_status_ts = now
+                data_pipeline = _pipeline_status_cache
+            except Exception as exc:
+                logger.debug("Data pipeline status lookup failed: %s", exc)
         except Exception as exc:
             logger.debug("MongoDB health check failed: %s", exc)
 
     uptime = round(time.monotonic() - getattr(app.state, "boot_time", time.monotonic()), 1)
+    gcs_ok, gcs_error = check_gcs_access()
+    if gcs_error is not None:
+        logger.debug("GCS health check failed: %s", gcs_error)
 
     status = "ok" if faiss_loaded else "degraded"
     status_code = 200 if faiss_loaded else 503
@@ -157,8 +185,11 @@ def health() -> JSONResponse:
         status=status,
         faiss_loaded=faiss_loaded,
         faiss_doc_count=doc_count,
+        faiss_last_updated=get_index_last_updated(_INDEX_DIR),
         mongodb_connected=mongo_ok,
+        gcs_accessible=gcs_ok,
         uptime_seconds=uptime,
         version=_APP_VERSION,
+        data_pipeline=data_pipeline,
     )
     return JSONResponse(status_code=status_code, content=body.model_dump())

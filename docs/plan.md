@@ -41,8 +41,8 @@ Phase 0                     P1         P2       P3       P4        P5         P6
 - IAM/운영보안: Cloud Run API / Airflow VM / Mongo VM 서비스 계정 분리, GCS versioning + UBLA + public access prevention 적용 완료
 - FastAPI API: 전체 구현 완료. Health, Search, Generate, Policies, Models, Evaluate 6개 엔드포인트 + Pydantic 스키마 + CORS + 미들웨어 + 에러 핸들링. python-reviewer 코드리뷰 반영 (CRITICAL 2 + HIGH 6 + MEDIUM 7 전부 수정). generate 엔드포인트에서 `LLMError` 타입 기반 에러 핸들링으로 교체 (문자열 스니핑 제거), 기본 검색 전략 hybrid로 변경 (CrossEncoder 로드 문제 방지), 모델 가용성 필터 (`_is_available()`) 적용
 - Phase 5 (UI): Streamlit 4페이지 구현 완료 (챗봇, 정책 탐색, 맞춤 추천, 평가 대시보드). 인프라 (API 클라이언트, 세션 상태, CSS) + 컴포넌트 3종 + 테스트 포함. 정책 상세 정보 14개 필드 표시 (description, eligibility, benefits, how_to_apply 등), 지역 코드→지역명 변환 (`_format_region`), XSS 방지 (`html.escape` + URL 스킴 검증), 빈 상세 정보 안내 메시지 추가
-- Phase 6 (배포): FastAPI 백엔드 API 구현 완료 (Cloud Run 배포 대상). Dockerfile 4종 + GitHub Actions 4종 작성 완료
-- 테스트: 전체 233 passed (API 테스트 26개 + UI 테스트 포함)
+- Phase 6 (배포): FastAPI 백엔드 API 구현 완료 (Cloud Run 배포 대상). Dockerfile 4종 + GitHub Actions 4종 작성 완료. python-reviewer 코드리뷰 CRITICAL 2 + HIGH 7 + MEDIUM 5 + LOW 1 전부 수정 완료 — structured logging 개선 (JSON 직렬화 + traceback 필드), GCS health check 반환값 명확화 (`None`/`True`/`False` 3상태), 평가 스키마 타입 강화 (`RagasScores`/`JudgeScores`/`SafetyScores` Pydantic 모델), deploy-ui.yml API_KEY Secret Manager 연결, Phase 6 유틸리티 테스트 20개 추가 (costs/cloud_run/monitoring)
+- 테스트: 전체 253 passed (API 테스트 26개 + UI 테스트 + Phase 6 유틸리티 테스트 20개 포함)
 
 ---
 

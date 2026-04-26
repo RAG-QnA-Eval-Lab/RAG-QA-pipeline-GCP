@@ -15,8 +15,9 @@ from pathlib import Path
 import pendulum
 from airflow.decorators import dag, task
 from airflow.models.param import Param
-from config.models import MODELS
 from utils.notifications import on_failure_callback
+
+from config.models import MODELS
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ def _resolve_model(model_key: str) -> str:
 )
 def evaluation_pipeline():
     @task()
-    def load_qa_dataset(**context) -> list[dict]:  # noqa: ARG001
+    def load_qa_dataset(**context) -> list[dict]:
         """QA 데이터셋 로드."""
         if not QA_DATASET_PATH.exists():
             raise FileNotFoundError(f"QA 데이터셋 없음: {QA_DATASET_PATH}")
@@ -83,7 +84,7 @@ def evaluation_pipeline():
         return samples
 
     @task()
-    def generate_rag_responses(qa_samples: list[dict], **context) -> dict:  # noqa: ARG001
+    def generate_rag_responses(qa_samples: list[dict], **context) -> dict:
         """모델별 RAG 응답 생성."""
         from src.generation.pipeline import RAGPipeline
 
@@ -141,7 +142,7 @@ def evaluation_pipeline():
         return all_results
 
     @task()
-    def evaluate_results(rag_results: dict, **context) -> dict:  # noqa: ARG001
+    def evaluate_results(rag_results: dict, **context) -> dict:
         """3단계 평가 수행."""
         from src.evaluation.evaluator import RAGEvaluator
 
@@ -159,7 +160,7 @@ def evaluation_pipeline():
         return evaluated_results
 
     @task()
-    def save_results(eval_results: dict, **context) -> str:  # noqa: ARG001
+    def save_results(eval_results: dict, **context) -> str:
         """평가 결과 리포트 저장."""
         from src.evaluation.report import generate_report
 
